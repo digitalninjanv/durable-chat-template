@@ -26,7 +26,10 @@ export class Chat extends Server<Env> {
 				content TEXT, 
 				timestamp INTEGER, 
 				reply_to TEXT, 
-				edited INTEGER
+				edited INTEGER,
+				pinned INTEGER,
+				attachment TEXT,
+				reactions TEXT
 			)`,
 		);
 
@@ -39,6 +42,15 @@ export class Chat extends Server<Env> {
 		} catch {}
 		try {
 			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN edited INTEGER`);
+		} catch {}
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN pinned INTEGER`);
+		} catch {}
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN attachment TEXT`);
+		} catch {}
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN reactions TEXT`);
 		} catch {}
 
 		// load the messages from the database
@@ -55,6 +67,9 @@ export class Chat extends Server<Env> {
 				timestamp: r.timestamp ? Number(r.timestamp) : Date.now(),
 				replyTo: r.reply_to ? JSON.parse(String(r.reply_to)) : undefined,
 				edited: Boolean(r.edited),
+				pinned: Boolean(r.pinned),
+				attachment: r.attachment ? JSON.parse(String(r.attachment)) : undefined,
+				reactions: r.reactions ? JSON.parse(String(r.reactions)) : undefined,
 			}));
 		} catch (e) {
 			console.error("Failed to load messages from SQLite:", e);
@@ -81,17 +96,23 @@ export class Chat extends Server<Env> {
 
 		const timestamp = message.timestamp || Date.now();
 		const replyToJSON = message.replyTo ? JSON.stringify(message.replyTo) : null;
+		const attachmentJSON = message.attachment ? JSON.stringify(message.attachment) : null;
+		const reactionsJSON = message.reactions ? JSON.stringify(message.reactions) : null;
 		const editedVal = message.edited ? 1 : 0;
+		const pinnedVal = message.pinned ? 1 : 0;
 
 		this.ctx.storage.sql.exec(
-			`INSERT INTO messages (id, user, role, content, timestamp, reply_to, edited) 
-			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO messages (id, user, role, content, timestamp, reply_to, edited, pinned, attachment, reactions) 
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET 
 				content = excluded.content, 
 				user = excluded.user, 
 				timestamp = excluded.timestamp, 
 				reply_to = excluded.reply_to, 
-				edited = excluded.edited`,
+				edited = excluded.edited,
+				pinned = excluded.pinned,
+				attachment = excluded.attachment,
+				reactions = excluded.reactions`,
 			message.id,
 			message.user,
 			message.role,
@@ -99,6 +120,9 @@ export class Chat extends Server<Env> {
 			timestamp,
 			replyToJSON,
 			editedVal,
+			pinnedVal,
+			attachmentJSON,
+			reactionsJSON,
 		);
 	}
 

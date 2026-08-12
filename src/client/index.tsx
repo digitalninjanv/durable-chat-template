@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { usePartySocket } from "partysocket/react";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
 	BrowserRouter,
 	Routes,
@@ -11,7 +11,14 @@ import {
 } from "react-router";
 import { nanoid } from "nanoid";
 
-import { names, type ChatMessage, type Message, type ReplyInfo } from "../shared";
+import {
+	names,
+	type ChatMessage,
+	type Message,
+	type ReplyInfo,
+	type Attachment,
+	type Reaction,
+} from "../shared";
 
 // Color presets for avatars and usernames
 const AVATAR_GRADIENTS = [
@@ -86,12 +93,20 @@ function TelegramApp() {
 	const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
 	const [activePopoverId, setActivePopoverId] = useState<string | null>(null);
 	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
 	const [showNameModal, setShowNameModal] = useState(false);
+	const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+	const [selectedImage, setSelectedImage] = useState<string | null>(null);
 	const [newNameInput, setNewNameInput] = useState(name);
 	const [toastMsg, setToastMsg] = useState<string | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [showSearch, setShowSearch] = useState(false);
+	const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+	const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Auto scroll to bottom
 	const scrollToBottom = () => {
@@ -100,7 +115,7 @@ function TelegramApp() {
 
 	useEffect(() => {
 		scrollToBottom();
-	}, [messages]);
+	}, [messages.length]);
 
 	// Toast helper
 	const showToast = (msg: string) => {
@@ -113,13 +128,32 @@ function TelegramApp() {
 	// Close popovers on click outside
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
-			if (!(e.target as HTMLElement).closest(".bubble-actions-trigger") &&
-				!(e.target as HTMLElement).closest(".popover-menu")) {
+			if (
+				!(e.target as HTMLElement).closest(".bubble-actions-trigger") &&
+				!(e.target as HTMLElement).closest(".popover-menu")
+			) {
 				setActivePopoverId(null);
 			}
 		};
 		window.addEventListener("click", handleClickOutside);
 		return () => window.removeEventListener("click", handleClickOutside);
+	}, []);
+
+	// Keyboard shortcut for Escape
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") {
+				setActivePopoverId(null);
+				setActiveReply(null);
+				setEditingMessage(null);
+				setShowSearch(false);
+				setShowNameModal(false);
+				setShowAttachmentModal(false);
+				setSelectedImage(null);
+			}
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, []);
 
 	// PartySocket connection
@@ -143,6 +177,15 @@ function TelegramApp() {
 					);
 				} else if (message.type === "delete") {
 					setMessages((prev) => prev.filter((m) => m.id !== message.id));
+				} else if (message.type === "typing") {
+					if (message.user !== name) {
+						setTypingUsers((prev) => {
+							const next = new Set(prev);
+							if (message.isTyping) next.add(message.user);
+							else next.delete(message.user);
+							return next;
+						});
+					}
 				} else if (message.type === "all") {
 					setMessages(message.messages);
 				}
@@ -152,6 +195,30 @@ function TelegramApp() {
 		},
 	});
 
+	// Broadcast typing status
+	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		setInputText(e.target.value);
+		if (socket) {
+			socket.send(
+				JSON.stringify({
+					type: "typing",
+					user: name,
+					isTyping: true,
+				} satisfies Message),
+			);
+			if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+			typingTimeoutRef.current = setTimeout(() => {
+				socket.send(
+					JSON.stringify({
+						type: "typing",
+						user: name,
+						isTyping: false,
+					} satisfies Message),
+				);
+			}, 2000);
+		}
+	};
+
 	// Send message handler
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -159,7 +226,6 @@ function TelegramApp() {
 		if (!trimmed) return;
 
 		if (editingMessage) {
-			// Edit mode
 			const updated: ChatMessage = {
 				...editingMessage,
 				content: trimmed,
@@ -174,7 +240,6 @@ function TelegramApp() {
 			);
 			setEditingMessage(null);
 		} else {
-			// Add new message
 			const newMessage: ChatMessage = {
 				id: nanoid(8),
 				content: trimmed,
@@ -222,6 +287,70 @@ function TelegramApp() {
 		inputRef.current?.focus();
 	};
 
+	const handleTogglePin = (msg: ChatMessage) => {
+		const updated: ChatMessage = {
+			...msg,
+			pinned: !msg.pinned,
+		};
+		setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+		socket.send(
+			JSON.stringify({
+				type: "update",
+				...updated,
+			} satisfies Message),
+		);
+		showToast(updated.pinned ? "Pesan disematkan! 📌" : "Pesan dilepas dari sematan 📌");
+		setActivePopoverId(null);
+	};
+
+	const handleAddReaction = (msg: ChatMessage, emoji: string) => {
+		const currentReactions = msg.reactions || [];
+		const existingIndex = currentReactions.findIndex((r) => r.emoji === emoji);
+
+		let updatedReactions: Reaction[];
+		if (existingIndex !== -1) {
+			const r = currentReactions[existingIndex];
+			const hasReacted = r.users.includes(name);
+			if (hasReacted) {
+				const newUsers = r.users.filter((u) => u !== name);
+				if (newUsers.length === 0) {
+					updatedReactions = currentReactions.filter((_, idx) => idx !== existingIndex);
+				} else {
+					updatedReactions = currentReactions.map((item, idx) =>
+						idx === existingIndex
+							? { ...item, count: newUsers.length, users: newUsers }
+							: item,
+					);
+				}
+			} else {
+				updatedReactions = currentReactions.map((item, idx) =>
+					idx === existingIndex
+						? { ...item, count: item.count + 1, users: [...item.users, name] }
+						: item,
+				);
+			}
+		} else {
+			updatedReactions = [
+				...currentReactions,
+				{ emoji, count: 1, users: [name] },
+			];
+		}
+
+		const updatedMsg: ChatMessage = {
+			...msg,
+			reactions: updatedReactions,
+		};
+
+		setMessages((prev) => prev.map((m) => (m.id === msg.id ? updatedMsg : m)));
+		socket.send(
+			JSON.stringify({
+				type: "update",
+				...updatedMsg,
+			} satisfies Message),
+		);
+		setActivePopoverId(null);
+	};
+
 	const handleDelete = (id: string) => {
 		setMessages((prev) => prev.filter((m) => m.id !== id));
 		socket.send(
@@ -232,6 +361,52 @@ function TelegramApp() {
 		);
 		showToast("Pesan telah dihapus 🗑️");
 		setActivePopoverId(null);
+	};
+
+	const handleSendAttachment = (type: "image" | "file" | "audio") => {
+		let attachment: Attachment;
+		if (type === "image") {
+			attachment = {
+				type: "image",
+				url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+				name: "design_concept.png",
+				size: "1.4 MB",
+			};
+		} else if (type === "file") {
+			attachment = {
+				type: "file",
+				url: "#",
+				name: "Project_Proposal_2026.pdf",
+				size: "3.8 MB",
+			};
+		} else {
+			attachment = {
+				type: "audio",
+				url: "#",
+				name: "Voice Note",
+				duration: "0:14",
+			};
+		}
+
+		const newMessage: ChatMessage = {
+			id: nanoid(8),
+			content: type === "image" ? "Membagikan gambar konsep desain 🎨" : type === "file" ? "Membagikan dokumen proposal 📄" : "Pesan Suara 🎙️",
+			user: name,
+			role: "user",
+			timestamp: Date.now(),
+			attachment,
+		};
+
+		setMessages((prev) => [...prev, newMessage]);
+		socket.send(
+			JSON.stringify({
+				type: "add",
+				...newMessage,
+			} satisfies Message),
+		);
+
+		setShowAttachmentModal(false);
+		showToast("Lampiran terkirim! 📎");
 	};
 
 	const handleCopyRoomLink = () => {
@@ -254,8 +429,39 @@ function TelegramApp() {
 		inputRef.current?.focus();
 	};
 
+	// Pinned message
+	const pinnedMessage = useMemo(() => {
+		return messages.slice().reverse().find((m) => m.pinned);
+	}, [messages]);
+
+	// Filtered messages by search
+	const filteredMessages = useMemo(() => {
+		if (!searchQuery.trim()) return messages;
+		return messages.filter(
+			(m) =>
+				m.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				m.user.toLowerCase().includes(searchQuery.toLowerCase()),
+		);
+	}, [messages, searchQuery]);
+
+	// Shared media images
+	const sharedImages = useMemo(() => {
+		return messages
+			.filter((m) => m.attachment && m.attachment.type === "image")
+			.map((m) => m.attachment!.url);
+	}, [messages]);
+
+	const typingText = useMemo(() => {
+		const arr = Array.from(typingUsers);
+		if (arr.length === 0) return null;
+		if (arr.length === 1) return `${arr[0]} sedang mengetik`;
+		return `${arr.join(", ")} sedang mengetik`;
+	}, [typingUsers]);
+
 	return (
 		<div className="telegram-app">
+			<div className="chat-pattern-bg"></div>
+
 			{/* Toast Notification */}
 			{toastMsg && <div className="toast">{toastMsg}</div>}
 
@@ -271,7 +477,7 @@ function TelegramApp() {
 						<div>
 							<div className="brand-title">Telegram Space</div>
 							<div className="brand-status">
-								<span className="pulse-dot"></span> Online via Cloudflare
+								<span className="pulse-dot"></span> Cloudflare Durable Edge
 							</div>
 						</div>
 					</div>
@@ -294,12 +500,12 @@ function TelegramApp() {
 						</div>
 						<div className="user-details">
 							<div className="name">{name}</div>
-							<span className="role-badge">Pengguna Aktif</span>
+							<span className="role-badge">Pengguna Online</span>
 						</div>
 					</div>
 					<button
 						className="btn-icon"
-						title="Ubah Nama"
+						title="Ubah Profil Nama"
 						onClick={() => {
 							setNewNameInput(name);
 							setShowNameModal(true);
@@ -322,7 +528,7 @@ function TelegramApp() {
 							<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
 							<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
 						</svg>
-						Bagikan Link Ruangan
+						Salin Link Obrolan
 					</button>
 					<button
 						className="btn-secondary"
@@ -337,7 +543,7 @@ function TelegramApp() {
 				</div>
 
 				<div className="sidebar-info-box">
-					💡 <strong>Durable Objects Edge:</strong> Obrolan disinkronkan secara real-time melalui WebSocket dan disimpan di database SQLite Cloudflare.
+					🔒 <strong>Real-time State Sync:</strong> Pesan dan lampiran tersimpan secara terisolasi di instance Durable Object SQLite lokasi edge.
 				</div>
 			</div>
 
@@ -362,11 +568,57 @@ function TelegramApp() {
 						</div>
 						<div className="room-meta">
 							<div className="room-title">Ruang #{room?.slice(0, 8)}</div>
-							<div className="room-sub">Real-time Chat · ID: {room}</div>
+							<div className="room-sub">
+								{typingText ? (
+									<span className="typing-indicator">
+										{typingText}
+										<span className="typing-dots">
+											<span></span><span></span><span></span>
+										</span>
+									</span>
+								) : (
+									`Koneksi Aktif · ID: ${room}`
+								)}
+							</div>
 						</div>
 					</div>
 
 					<div className="header-actions">
+						{/* Search Bar Toggle */}
+						{showSearch ? (
+							<div className="header-search-bar">
+								<input
+									type="text"
+									className="header-search-input"
+									placeholder="Cari pesan..."
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									autoFocus
+								/>
+								<button
+									className="btn-icon"
+									style={{ width: "24px", height: "24px" }}
+									onClick={() => {
+										setShowSearch(false);
+										setSearchQuery("");
+									}}
+								>
+									✕
+								</button>
+							</div>
+						) : (
+							<button
+								className="btn-icon"
+								title="Cari Pesan"
+								onClick={() => setShowSearch(true)}
+							>
+								<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+									<circle cx="11" cy="11" r="8"/>
+									<line x1="21" y1="21" x2="16.65" y2="16.65"/>
+								</svg>
+							</button>
+						)}
+
 						<button
 							className="btn-icon"
 							title="Salin Link"
@@ -377,17 +629,53 @@ function TelegramApp() {
 								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
 							</svg>
 						</button>
+
+						<button
+							className={`btn-icon ${detailsDrawerOpen ? "active" : ""}`}
+							title="Detail Ruangan"
+							onClick={() => setDetailsDrawerOpen(!detailsDrawerOpen)}
+						>
+							<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+								<circle cx="12" cy="12" r="10"/>
+								<line x1="12" y1="16" x2="12" y2="12"/>
+								<line x1="12" y1="8" x2="12.01" y2="8"/>
+							</svg>
+						</button>
 					</div>
 				</div>
 
+				{/* Pinned Message Glassmorphism Banner */}
+				{pinnedMessage && (
+					<div className="pinned-banner">
+						<div
+							className="pinned-info"
+							onClick={() => setHighlightedMsgId(pinnedMessage.id)}
+						>
+							<div className="pinned-title">📌 Pesan Disematkan</div>
+							<div className="pinned-snippet">
+								<strong>{pinnedMessage.user}:</strong> {pinnedMessage.content}
+							</div>
+						</div>
+						<button
+							className="btn-icon"
+							title="Lepas Sematan"
+							onClick={() => handleTogglePin(pinnedMessage)}
+						>
+							✕
+						</button>
+					</div>
+				)}
+
 				{/* Messages Stream Viewport */}
 				<div className="messages-container">
-					{messages.length === 0 ? (
-						<div className="date-divider">Belum ada pesan. Mulai obrolan sekarang!</div>
+					{filteredMessages.length === 0 ? (
+						<div className="date-divider">
+							{searchQuery ? "Tidak ada pesan yang cocok dengan pencarian" : "Belum ada pesan. Mulai obrolan sekarang!"}
+						</div>
 					) : (
-						messages.map((msg, idx) => {
+						filteredMessages.map((msg, idx) => {
 							const isOwn = msg.user === name;
-							const prevMsg = idx > 0 ? messages[idx - 1] : null;
+							const prevMsg = idx > 0 ? filteredMessages[idx - 1] : null;
 							const showDateDivider =
 								!prevMsg ||
 								formatDateHeader(prevMsg.timestamp) !==
@@ -402,9 +690,10 @@ function TelegramApp() {
 									)}
 
 									<div
+										id={`msg-${msg.id}`}
 										className={`message-row ${
 											isOwn ? "outgoing" : "incoming"
-										}`}
+										} ${highlightedMsgId === msg.id ? "highlighted" : ""}`}
 									>
 										{!isOwn && (
 											<div
@@ -418,6 +707,12 @@ function TelegramApp() {
 										)}
 
 										<div className="message-bubble">
+											{msg.pinned && (
+												<div className="pinned-indicator">
+													📌 Disematkan
+												</div>
+											)}
+
 											{/* 3-dots actions trigger */}
 											<button
 												className={`bubble-actions-trigger ${
@@ -441,24 +736,51 @@ function TelegramApp() {
 											{/* Popover Menu */}
 											{activePopoverId === msg.id && (
 												<div className="popover-menu">
+													{/* Quick Reaction Bar in Popover */}
+													<div className="popover-reactions-bar">
+														{["❤️", "👍", "🔥", "🎉", "😂"].map((e) => (
+															<button
+																key={e}
+																className="emoji-btn"
+																onClick={() => handleAddReaction(msg, e)}
+															>
+																{e}
+															</button>
+														))}
+													</div>
 													<div
 														className="popover-item"
 														onClick={() => handleCopyText(msg.content)}
 													>
-														<span>📋</span> Salin Teks
+														<div className="popover-item-left">
+															<span>📋</span> Salin Teks
+														</div>
+														<span className="popover-shortcut">Ctrl+C</span>
 													</div>
 													<div
 														className="popover-item"
 														onClick={() => handleReply(msg)}
 													>
-														<span>💬</span> Balas Pesan
+														<div className="popover-item-left">
+															<span>💬</span> Balas Pesan
+														</div>
+													</div>
+													<div
+														className="popover-item"
+														onClick={() => handleTogglePin(msg)}
+													>
+														<div className="popover-item-left">
+															<span>📌</span> {msg.pinned ? "Lepas Sematan" : "Sematkan"}
+														</div>
 													</div>
 													{isOwn && (
 														<div
 															className="popover-item"
 															onClick={() => handleEdit(msg)}
 														>
-															<span>✏️</span> Edit Pesan
+															<div className="popover-item-left">
+																<span>✏️</span> Edit Pesan
+															</div>
 														</div>
 													)}
 													{isOwn && (
@@ -466,7 +788,9 @@ function TelegramApp() {
 															className="popover-item danger"
 															onClick={() => handleDelete(msg.id)}
 														>
-															<span>🗑️</span> Hapus Pesan
+															<div className="popover-item-left">
+																<span>🗑️</span> Hapus Pesan
+															</div>
 														</div>
 													)}
 												</div>
@@ -484,7 +808,10 @@ function TelegramApp() {
 
 											{/* Quoted Message Preview */}
 											{msg.replyTo && (
-												<div className="quoted-box">
+												<div
+													className="quoted-box"
+													onClick={() => setHighlightedMsgId(msg.replyTo!.id)}
+												>
 													<div className="quoted-user">
 														{msg.replyTo.user}
 													</div>
@@ -494,15 +821,81 @@ function TelegramApp() {
 												</div>
 											)}
 
+											{/* Attachment Preview */}
+											{msg.attachment && (
+												<div className="attachment-card">
+													{msg.attachment.type === "image" && (
+														<img
+															src={msg.attachment.url}
+															alt={msg.attachment.name}
+															className="attachment-image"
+															onClick={() => setSelectedImage(msg.attachment!.url)}
+														/>
+													)}
+													{msg.attachment.type === "file" && (
+														<div className="attachment-file">
+															<div className="file-icon">📄</div>
+															<div>
+																<div className="file-name">{msg.attachment.name}</div>
+																<div className="file-size">{msg.attachment.size || "File"}</div>
+															</div>
+														</div>
+													)}
+													{msg.attachment.type === "audio" && (
+														<div className="audio-player-bubble">
+															<button className="btn-icon" style={{ background: "rgba(255,255,255,0.1)" }}>
+																▶
+															</button>
+															<div className="waveform">
+																<div className="waveform-bar" style={{ height: "12px" }}></div>
+																<div className="waveform-bar" style={{ height: "18px" }}></div>
+																<div className="waveform-bar" style={{ height: "8px" }}></div>
+																<div className="waveform-bar" style={{ height: "15px" }}></div>
+																<div className="waveform-bar" style={{ height: "10px" }}></div>
+															</div>
+															<span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{msg.attachment.duration || "0:14"}</span>
+														</div>
+													)}
+												</div>
+											)}
+
 											{/* Main Message Text */}
 											<div className="message-text">{msg.content}</div>
 
-											{/* Time & Meta */}
+											{/* Reactions List */}
+											{msg.reactions && msg.reactions.length > 0 && (
+												<div className="reactions-container">
+													{msg.reactions.map((r) => {
+														const hasReacted = r.users.includes(name);
+														return (
+															<div
+																key={r.emoji}
+																className={`reaction-badge ${
+																	hasReacted ? "user-reacted" : ""
+																}`}
+																onClick={() => handleAddReaction(msg, r.emoji)}
+															>
+																<span>{r.emoji}</span>
+																<span>{r.count}</span>
+															</div>
+														);
+													})}
+												</div>
+											)}
+
+											{/* Time & Read Receipts */}
 											<div className="message-meta">
 												{msg.edited && (
 													<span className="edited-tag">diedit</span>
 												)}
 												<span>{formatTime(msg.timestamp)}</span>
+												{isOwn && (
+													<span className="check-icon" title="Terkirim">
+														<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+															<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+														</svg>
+													</span>
+												)}
 											</div>
 										</div>
 									</div>
@@ -554,7 +947,7 @@ function TelegramApp() {
 
 				{/* Quick Emoji Bar */}
 				<div className="emoji-quick-bar">
-					{["👍", "❤️", "🔥", "😂", "🎉", "😮", "🙏", "💯"].map((emoji) => (
+					{["👍", "❤️", "🔥", "😂", "🎉", "😮", "🙏", "💯", "🚀", "✨"].map((emoji) => (
 						<button
 							key={emoji}
 							className="emoji-btn"
@@ -568,6 +961,17 @@ function TelegramApp() {
 
 				{/* Bottom Chat Input Form */}
 				<form className="chat-input-area" onSubmit={handleSubmit}>
+					<button
+						type="button"
+						className="attachment-trigger-btn"
+						title="Lampirkan File/Media"
+						onClick={() => setShowAttachmentModal(true)}
+					>
+						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+							<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+						</svg>
+					</button>
+
 					<div className="chat-input-wrapper">
 						<input
 							ref={inputRef}
@@ -579,7 +983,7 @@ function TelegramApp() {
 									: `Tulis pesan sebagai ${name}...`
 							}
 							value={inputText}
-							onChange={(e) => setInputText(e.target.value)}
+							onChange={handleInputChange}
 							autoComplete="off"
 						/>
 					</div>
@@ -590,6 +994,58 @@ function TelegramApp() {
 					</button>
 				</form>
 			</div>
+
+			{/* Right Details Drawer */}
+			{detailsDrawerOpen && (
+				<div className="chat-details-drawer">
+					<div className="drawer-header">
+						<span>Info Ruangan</span>
+						<button
+							className="btn-icon"
+							onClick={() => setDetailsDrawerOpen(false)}
+						>
+							✕
+						</button>
+					</div>
+
+					<div className="drawer-section">
+						<div className="drawer-title">Media Obrolan</div>
+						{sharedImages.length === 0 ? (
+							<div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+								Belum ada gambar yang dibagikan.
+							</div>
+						) : (
+							<div className="media-grid">
+								{sharedImages.map((imgUrl, i) => (
+									<img
+										key={i}
+										src={imgUrl}
+										alt="Media"
+										className="media-thumb"
+										onClick={() => setSelectedImage(imgUrl)}
+									/>
+								))}
+							</div>
+						)}
+					</div>
+
+					<div className="drawer-section">
+						<div className="drawer-title">Pengguna Aktif</div>
+						<div className="user-info" style={{ marginBottom: "8px" }}>
+							<div
+								className="avatar"
+								style={{ background: getAvatarBackground(name) }}
+							>
+								{name.charAt(0).toUpperCase()}
+							</div>
+							<div className="user-details">
+								<div className="name">{name} (Anda)</div>
+								<span className="role-badge">Online</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Change Nickname Modal */}
 			{showNameModal && (
@@ -624,6 +1080,67 @@ function TelegramApp() {
 							</button>
 						</div>
 					</div>
+				</div>
+			)}
+
+			{/* Attachment Picker Modal */}
+			{showAttachmentModal && (
+				<div className="modal-overlay" onClick={() => setShowAttachmentModal(false)}>
+					<div className="modal-content" onClick={(e) => e.stopPropagation()}>
+						<div className="modal-title">Kirim Lampiran</div>
+						<div className="modal-desc">
+							Pilih jenis media yang ingin dikirimkan ke ruang obrolan:
+						</div>
+						<div className="attachment-type-grid">
+							<button
+								className="attachment-type-btn"
+								onClick={() => handleSendAttachment("image")}
+							>
+								<span style={{ fontSize: "24px" }}>📸</span>
+								<span>Gambar</span>
+							</button>
+							<button
+								className="attachment-type-btn"
+								onClick={() => handleSendAttachment("file")}
+							>
+								<span style={{ fontSize: "24px" }}>📄</span>
+								<span>Dokumen</span>
+							</button>
+							<button
+								className="attachment-type-btn"
+								onClick={() => handleSendAttachment("audio")}
+							>
+								<span style={{ fontSize: "24px" }}>🎙️</span>
+								<span>Pesan Suara</span>
+							</button>
+						</div>
+						<div className="modal-actions">
+							<button
+								className="btn-secondary"
+								style={{ width: "auto" }}
+								onClick={() => setShowAttachmentModal(false)}
+							>
+								Batal
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Image Viewer Zoom Modal */}
+			{selectedImage && (
+				<div className="modal-overlay" onClick={() => setSelectedImage(null)}>
+					<img
+						src={selectedImage}
+						alt="Zoom"
+						style={{
+							maxWidth: "90vw",
+							maxHeight: "90vh",
+							borderRadius: "12px",
+							boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+						}}
+						onClick={(e) => e.stopPropagation()}
+					/>
 				</div>
 			)}
 		</div>

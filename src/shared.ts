@@ -4,6 +4,20 @@ export type ReplyInfo = {
 	content: string;
 };
 
+export type Attachment = {
+	type: "image" | "file" | "audio";
+	url: string;
+	name: string;
+	size?: string;
+	duration?: string;
+};
+
+export type Reaction = {
+	emoji: string;
+	count: number;
+	users: string[];
+};
+
 export type ChatMessage = {
 	id: string;
 	content: string;
@@ -12,6 +26,9 @@ export type ChatMessage = {
 	timestamp?: number;
 	replyTo?: ReplyInfo | null;
 	edited?: boolean;
+	pinned?: boolean;
+	attachment?: Attachment | null;
+	reactions?: Reaction[];
 };
 
 export type Message =
@@ -24,6 +41,9 @@ export type Message =
 			timestamp?: number;
 			replyTo?: ReplyInfo | null;
 			edited?: boolean;
+			pinned?: boolean;
+			attachment?: Attachment | null;
+			reactions?: Reaction[];
 	  }
 	| {
 			type: "update";
@@ -34,10 +54,18 @@ export type Message =
 			timestamp?: number;
 			replyTo?: ReplyInfo | null;
 			edited?: boolean;
+			pinned?: boolean;
+			attachment?: Attachment | null;
+			reactions?: Reaction[];
 	  }
 	| {
 			type: "delete";
 			id: string;
+	  }
+	| {
+			type: "typing";
+			user: string;
+			isTyping: boolean;
 	  }
 	| {
 			type: "all";
