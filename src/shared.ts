@@ -1,8 +1,17 @@
+export type ReplyInfo = {
+	id: string;
+	user: string;
+	content: string;
+};
+
 export type ChatMessage = {
 	id: string;
 	content: string;
 	user: string;
 	role: "user" | "assistant";
+	timestamp?: number;
+	replyTo?: ReplyInfo | null;
+	edited?: boolean;
 };
 
 export type Message =
@@ -12,6 +21,9 @@ export type Message =
 			content: string;
 			user: string;
 			role: "user" | "assistant";
+			timestamp?: number;
+			replyTo?: ReplyInfo | null;
+			edited?: boolean;
 	  }
 	| {
 			type: "update";
@@ -19,6 +31,13 @@ export type Message =
 			content: string;
 			user: string;
 			role: "user" | "assistant";
+			timestamp?: number;
+			replyTo?: ReplyInfo | null;
+			edited?: boolean;
+	  }
+	| {
+			type: "delete";
+			id: string;
 	  }
 	| {
 			type: "all";

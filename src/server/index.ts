@@ -17,18 +17,49 @@ export class Chat extends Server<Env> {
 	}
 
 	onStart() {
-		// this is where you can initialize things that need to be done before the server starts
-		// for example, load previous messages from a database or a service
-
 		// create the messages table if it doesn't exist
 		this.ctx.storage.sql.exec(
-			`CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user TEXT, role TEXT, content TEXT)`,
+			`CREATE TABLE IF NOT EXISTS messages (
+				id TEXT PRIMARY KEY, 
+				user TEXT, 
+				role TEXT, 
+				content TEXT, 
+				timestamp INTEGER, 
+				reply_to TEXT, 
+				edited INTEGER
+			)`,
 		);
 
+		// ensure optional columns exist if migrating from old schema
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN timestamp INTEGER`);
+		} catch {}
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN reply_to TEXT`);
+		} catch {}
+		try {
+			this.ctx.storage.sql.exec(`ALTER TABLE messages ADD COLUMN edited INTEGER`);
+		} catch {}
+
 		// load the messages from the database
-		this.messages = this.ctx.storage.sql
-			.exec(`SELECT * FROM messages`)
-			.toArray() as ChatMessage[];
+		try {
+			const rows = this.ctx.storage.sql
+				.exec(`SELECT * FROM messages`)
+				.toArray() as Record<string, any>[];
+
+			this.messages = rows.map((r) => ({
+				id: String(r.id),
+				user: String(r.user || "Anonymous"),
+				role: (r.role as "user" | "assistant") || "user",
+				content: String(r.content || ""),
+				timestamp: r.timestamp ? Number(r.timestamp) : Date.now(),
+				replyTo: r.reply_to ? JSON.parse(String(r.reply_to)) : undefined,
+				edited: Boolean(r.edited),
+			}));
+		} catch (e) {
+			console.error("Failed to load messages from SQLite:", e);
+			this.messages = [];
+		}
 	}
 
 	onConnect(connection: Connection) {
@@ -41,39 +72,55 @@ export class Chat extends Server<Env> {
 	}
 
 	saveMessage(message: ChatMessage) {
-		// check if the message already exists
-		const existingMessage = this.messages.find((m) => m.id === message.id);
-		if (existingMessage) {
-			this.messages = this.messages.map((m) => {
-				if (m.id === message.id) {
-					return message;
-				}
-				return m;
-			});
+		const existingIndex = this.messages.findIndex((m) => m.id === message.id);
+		if (existingIndex !== -1) {
+			this.messages[existingIndex] = message;
 		} else {
 			this.messages.push(message);
 		}
 
-		// Use parameterized queries to prevent SQL injection
+		const timestamp = message.timestamp || Date.now();
+		const replyToJSON = message.replyTo ? JSON.stringify(message.replyTo) : null;
+		const editedVal = message.edited ? 1 : 0;
+
 		this.ctx.storage.sql.exec(
-			`INSERT INTO messages (id, user, role, content) VALUES (?, ?, ?, ?)
-			 ON CONFLICT (id) DO UPDATE SET content = ?`,
+			`INSERT INTO messages (id, user, role, content, timestamp, reply_to, edited) 
+			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (id) DO UPDATE SET 
+				content = excluded.content, 
+				user = excluded.user, 
+				timestamp = excluded.timestamp, 
+				reply_to = excluded.reply_to, 
+				edited = excluded.edited`,
 			message.id,
 			message.user,
 			message.role,
 			message.content,
-			message.content,
+			timestamp,
+			replyToJSON,
+			editedVal,
 		);
 	}
 
+	deleteMessage(id: string) {
+		this.messages = this.messages.filter((m) => m.id !== id);
+		this.ctx.storage.sql.exec(`DELETE FROM messages WHERE id = ?`, id);
+	}
+
 	onMessage(connection: Connection, message: WSMessage) {
-		// let's broadcast the raw message to everyone else
+		// broadcast the raw message to everyone else
 		this.broadcast(message);
 
-		// let's update our local messages store
-		const parsed = JSON.parse(message as string) as Message;
-		if (parsed.type === "add" || parsed.type === "update") {
-			this.saveMessage(parsed);
+		// update local store
+		try {
+			const parsed = JSON.parse(message as string) as Message;
+			if (parsed.type === "add" || parsed.type === "update") {
+				this.saveMessage(parsed);
+			} else if (parsed.type === "delete") {
+				this.deleteMessage(parsed.id);
+			}
+		} catch (e) {
+			console.error("Failed to process message:", e);
 		}
 	}
 }
