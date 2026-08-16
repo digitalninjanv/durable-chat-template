@@ -279,6 +279,40 @@ function DurableChatApp() {
 		[socket, profile.name, activeReply],
 	);
 
+	// Send real attachment (photo, document, or audio)
+	const handleSendRealAttachment = useCallback(
+		(attachment: Attachment, caption?: string) => {
+			const content = caption || (attachment.type === "image" ? "Membagikan gambar 🖼️" : attachment.type === "file" ? `Membagikan berkas: ${attachment.name}` : "Pesan Suara 🎙️");
+
+			const newMessage: ChatMessage = {
+				id: nanoid(8),
+				content,
+				user: profile.name,
+				role: "user",
+				timestamp: Date.now(),
+				attachment,
+				replyTo: activeReply,
+			};
+
+			setMessages((prev) => [...prev, newMessage]);
+			sounds.playSend();
+
+			if (socket) {
+				socket.send(
+					JSON.stringify({
+						type: "add",
+						...newMessage,
+					} satisfies Message),
+				);
+			}
+
+			setActiveReply(null);
+			setIsAttachmentOpen(false);
+			addToast("Lampiran berhasil dikirim ke saluran!", "success");
+		},
+		[socket, profile.name, activeReply, addToast],
+	);
+
 	// Save edited message
 	const handleSaveEdit = useCallback(
 		(newContent: string) => {
@@ -404,65 +438,6 @@ function DurableChatApp() {
 		[socket, profile.name],
 	);
 
-	// Send Attachment simulation
-	const handleSendAttachment = useCallback(
-		(type: "image" | "file" | "audio") => {
-			let attachment: Attachment;
-			let content = "";
-
-			if (type === "image") {
-				attachment = {
-					type: "image",
-					url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1000&q=80",
-					name: "Cloudflare_Edge_Cluster.png",
-					size: "1.8 MB",
-				};
-				content = "Membagikan diagram topologi jaringan edge 🖼️";
-			} else if (type === "file") {
-				attachment = {
-					type: "file",
-					url: "#",
-					name: "Durable_Objects_Architecture_v2.pdf",
-					size: "2.4 MB",
-				};
-				content = "Membagikan spesifikasi arsitektur Durable Objects 📄";
-			} else {
-				attachment = {
-					type: "audio",
-					url: "#",
-					name: "Voice_Note_Edge_Update.mp3",
-					duration: "0:24",
-				};
-				content = "Pesan suara dari pengembang 🎙️";
-			}
-
-			const newMessage: ChatMessage = {
-				id: nanoid(8),
-				content,
-				user: profile.name,
-				role: "user",
-				timestamp: Date.now(),
-				attachment,
-			};
-
-			setMessages((prev) => [...prev, newMessage]);
-			sounds.playSend();
-
-			if (socket) {
-				socket.send(
-					JSON.stringify({
-						type: "add",
-						...newMessage,
-					} satisfies Message),
-				);
-			}
-
-			setIsAttachmentOpen(false);
-			addToast("Lampiran berhasil dikirim ke saluran", "success");
-		},
-		[socket, profile.name, addToast],
-	);
-
 	// Copy room link
 	const handleCopyRoomLink = useCallback(() => {
 		navigator.clipboard.writeText(window.location.href);
@@ -586,6 +561,8 @@ function DurableChatApp() {
 					onAddReaction={handleAddReaction}
 					onImageClick={(url) => setSelectedImageUrl(url)}
 					onSendPrompt={handleSendMessage}
+					onSendAttachment={handleSendRealAttachment}
+					onError={(msg) => addToast(msg, "error")}
 					highlightedMsgId={highlightedMsgId}
 					pinnedOnlyFilter={isShowingPinnedOnly}
 				/>
@@ -593,6 +570,7 @@ function DurableChatApp() {
 				<MessageInput
 					currentUserName={profile.name}
 					onSendMessage={handleSendMessage}
+					onSendAttachment={handleSendRealAttachment}
 					activeReply={activeReply}
 					onCancelReply={() => setActiveReply(null)}
 					editingMessage={editingMessage}
@@ -637,7 +615,8 @@ function DurableChatApp() {
 			<AttachmentModal
 				isOpen={isAttachmentOpen}
 				onClose={() => setIsAttachmentOpen(false)}
-				onSendAttachment={handleSendAttachment}
+				onSendAttachment={handleSendRealAttachment}
+				onError={(msg) => addToast(msg, "error")}
 			/>
 
 			<ImageViewerModal

@@ -1,6 +1,12 @@
-import React, { useState } from "react";
-import type { UserProfile, ChatMessage } from "../types";
-import { AVATAR_PALETTES, getInitial } from "../utils/helpers";
+import React, { useState, useRef, useEffect } from "react";
+import type { UserProfile, ChatMessage, Attachment } from "../types";
+import {
+	AVATAR_PALETTES,
+	getInitial,
+	compressImageFile,
+	processDocumentFile,
+	readFileAsDataUrl,
+} from "../utils/helpers";
 import {
 	CloseIcon,
 	ImageIcon,
@@ -8,7 +14,9 @@ import {
 	MicIcon,
 	SearchIcon,
 	CheckIcon,
-	CodeIcon,
+	PlayIcon,
+	PauseIcon,
+	SendIcon,
 } from "./Icons";
 
 // -------------------------------------------------------------
@@ -231,72 +239,283 @@ export const NewRoomModal: React.FC<NewRoomModalProps> = ({
 };
 
 // -------------------------------------------------------------
-// Attachment Modal
+// Real Free Attachment Modal (Images, Documents, Voice Note)
 // -------------------------------------------------------------
 interface AttachmentModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onSendAttachment: (type: "image" | "file" | "audio") => void;
+	onSendAttachment: (attachment: Attachment, caption?: string) => void;
+	onError: (msg: string) => void;
 }
 
 export const AttachmentModal: React.FC<AttachmentModalProps> = ({
 	isOpen,
 	onClose,
 	onSendAttachment,
+	onError,
 }) => {
+	const [activeTab, setActiveTab] = useState<"choose" | "voice">("choose");
+	const [isRecording, setIsRecording] = useState(false);
+	const [recordingSeconds, setRecordingSeconds] = useState(0);
+	const [isProcessing, setIsProcessing] = useState(false);
+
+	const imageInputRef = useRef<HTMLInputElement>(null);
+	const docInputRef = useRef<HTMLInputElement>(null);
+	const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+	const audioChunksRef = useRef<Blob[]>([]);
+	const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+			if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+				mediaRecorderRef.current.stop();
+			}
+		};
+	}, []);
+
 	if (!isOpen) return null;
+
+	// Handle Image File Selection
+	const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files;
+		if (!files || files.length === 0) return;
+		const file = files[0];
+
+		try {
+			setIsProcessing(true);
+			const { dataUrl, size, name } = await compressImageFile(file);
+			onSendAttachment(
+				{
+					type: "image",
+					url: dataUrl,
+					name,
+					size,
+				},
+				name,
+			);
+			onClose();
+		} catch (err) {
+			console.error("Error compressing image:", err);
+			onError("Gagal memproses gambar. Coba format gambar lain.");
+		} finally {
+			setIsProcessing(false);
+			if (imageInputRef.current) imageInputRef.current.value = "";
+		}
+	};
+
+	// Handle Document / File Selection
+	const handleDocChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const files = e.target.files;
+		if (!files || files.length === 0) return;
+		const file = files[0];
+
+		// Check size limit: 3MB max for free edge websocket transmission
+		if (file.size > 3.5 * 1024 * 1024) {
+			onError("Ukuran berkas melebihi batas 3.5MB untuk transmisi instan edge gratis.");
+			if (docInputRef.current) docInputRef.current.value = "";
+			return;
+		}
+
+		try {
+			setIsProcessing(true);
+			const { dataUrl, size, name } = await processDocumentFile(file);
+			onSendAttachment(
+				{
+					type: "file",
+					url: dataUrl,
+					name,
+					size,
+				},
+				`Membagikan berkas: ${name}`,
+			);
+			onClose();
+		} catch (err) {
+			console.error("Error reading file:", err);
+			onError("Gagal memuat berkas.");
+		} finally {
+			setIsProcessing(false);
+			if (docInputRef.current) docInputRef.current.value = "";
+		}
+	};
+
+	// Real Voice Recording via MediaRecorder
+	const startVoiceRecording = async () => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			const recorder = new MediaRecorder(stream);
+			mediaRecorderRef.current = recorder;
+			audioChunksRef.current = [];
+
+			recorder.ondataavailable = (event) => {
+				if (event.data.size > 0) {
+					audioChunksRef.current.push(event.data);
+				}
+			};
+
+			recorder.onstop = async () => {
+				const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+				stream.getTracks().forEach((track) => track.stop());
+
+				const durationStr = `0:${recordingSeconds < 10 ? "0" : ""}${recordingSeconds}`;
+				const dataUrl = await readFileAsDataUrl(audioBlob);
+
+				onSendAttachment(
+					{
+						type: "audio",
+						url: dataUrl,
+						name: `Pesan_Suara_${Date.now()}.webm`,
+						duration: durationStr,
+					},
+					"Pesan Suara 🎙️",
+				);
+				onClose();
+			};
+
+			recorder.start();
+			setIsRecording(true);
+			setRecordingSeconds(0);
+
+			timerIntervalRef.current = setInterval(() => {
+				setRecordingSeconds((prev) => prev + 1);
+			}, 1000);
+		} catch (err) {
+			console.error("Microphone access denied:", err);
+			onError("Izin mikrofon diperlukan untuk merekam pesan suara.");
+			setActiveTab("choose");
+		}
+	};
+
+	const stopVoiceRecording = () => {
+		if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+		if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+			mediaRecorderRef.current.stop();
+		}
+		setIsRecording(false);
+	};
 
 	return (
 		<div className="modal-backdrop" onClick={onClose}>
 			<div className="modal-card" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+				{/* Hidden File Inputs for Native OS File Pickers */}
+				<input
+					ref={imageInputRef}
+					type="file"
+					accept="image/*"
+					style={{ display: "none" }}
+					onChange={handleImageChange}
+				/>
+				<input
+					ref={docInputRef}
+					type="file"
+					accept="*/*"
+					style={{ display: "none" }}
+					onChange={handleDocChange}
+				/>
+
 				<div className="modal-header">
-					<h3 className="modal-title">Kirim Lampiran</h3>
+					<h3 className="modal-title">
+						{activeTab === "voice" ? "Rekam Pesan Suara" : "Kirim Media & Berkas Asli"}
+					</h3>
 					<button type="button" className="modal-close-btn" onClick={onClose} aria-label="Tutup">
 						<CloseIcon size={18} />
 					</button>
 				</div>
 
-				<div className="attachment-options-grid">
-					<button
-						type="button"
-						className="attachment-option-card"
-						onClick={() => onSendAttachment("image")}
-					>
-						<div className="option-icon-box image-bg">
-							<ImageIcon size={26} />
-						</div>
-						<div className="option-title">Foto & Gambar</div>
-						<div className="option-desc">Kirim tangkapan layar atau gambar arsitektur</div>
-					</button>
+				{isProcessing ? (
+					<div className="modal-loading-state">
+						<div className="spinner-loader" />
+						<p>Memproses dan mengompresi media...</p>
+					</div>
+				) : activeTab === "choose" ? (
+					<div className="attachment-options-grid">
+						{/* Real Image Picker Trigger */}
+						<button
+							type="button"
+							className="attachment-option-card"
+							onClick={() => imageInputRef.current?.click()}
+						>
+							<div className="option-icon-box image-bg">
+								<ImageIcon size={26} />
+							</div>
+							<div className="option-title">Foto & Gambar Asli</div>
+							<div className="option-desc">Pilih dari galeri / komputer (Kompresi otomatis cerdas)</div>
+						</button>
 
-					<button
-						type="button"
-						className="attachment-option-card"
-						onClick={() => onSendAttachment("file")}
-					>
-						<div className="option-icon-box doc-bg">
-							<FileTextIcon size={26} />
-						</div>
-						<div className="option-title">Dokumen & Berkas</div>
-						<div className="option-desc">PDF, JSON schema, spek API, atau lembar kerja</div>
-					</button>
+						{/* Real Document Picker Trigger */}
+						<button
+							type="button"
+							className="attachment-option-card"
+							onClick={() => docInputRef.current?.click()}
+						>
+							<div className="option-icon-box doc-bg">
+								<FileTextIcon size={26} />
+							</div>
+							<div className="option-title">Dokumen & Berkas</div>
+							<div className="option-desc">PDF, JSON, TXT, ZIP, Dokumen (Maks. 3.5MB gratis)</div>
+						</button>
 
-					<button
-						type="button"
-						className="attachment-option-card"
-						onClick={() => onSendAttachment("audio")}
-					>
-						<div className="option-icon-box audio-bg">
-							<MicIcon size={26} />
+						{/* Real Voice Note Recorder Trigger */}
+						<button
+							type="button"
+							className="attachment-option-card"
+							onClick={() => {
+								setActiveTab("voice");
+								startVoiceRecording();
+							}}
+						>
+							<div className="option-icon-box audio-bg">
+								<MicIcon size={26} />
+							</div>
+							<div className="option-title">Rekam Suara</div>
+							<div className="option-desc">Rekam mikrofon langsung & kirim ke ruangan</div>
+						</button>
+					</div>
+				) : (
+					/* Voice Recorder Interface */
+					<div className="voice-recorder-box">
+						<div className="recording-indicator-pulse">
+							<MicIcon size={32} />
 						</div>
-						<div className="option-title">Pesan Suara</div>
-						<div className="option-desc">Rekaman audio singkat dengan visual waveform</div>
-					</button>
-				</div>
+						<div className="recording-timer">
+							0:{recordingSeconds < 10 ? "0" : ""}{recordingSeconds}
+						</div>
+						<p className="recording-hint">Sedang merekam suara dari mikrofon...</p>
+
+						<div className="voice-recorder-actions">
+							<button
+								type="button"
+								className="btn-ghost"
+								onClick={() => {
+									if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+									if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+										mediaRecorderRef.current.stop();
+									}
+									setIsRecording(false);
+									setActiveTab("choose");
+								}}
+							>
+								Batal
+							</button>
+							<button
+								type="button"
+								className="btn-solid-primary send-voice-btn"
+								onClick={stopVoiceRecording}
+							>
+								<SendIcon size={16} />
+								<span>Selesai & Kirim</span>
+							</button>
+						</div>
+					</div>
+				)}
 
 				<div className="modal-footer">
-					<button type="button" className="btn-ghost" onClick={onClose}>
-						Batal
+					<button
+						type="button"
+						className="btn-ghost"
+						onClick={onClose}
+					>
+						Tutup
 					</button>
 				</div>
 			</div>

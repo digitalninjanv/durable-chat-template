@@ -1,5 +1,5 @@
 import { names } from "../../shared";
-import type { ChatMessage, RoomInfo } from "../types";
+import type { ChatMessage, RoomInfo, Attachment } from "../types";
 
 export const AVATAR_PALETTES = [
 	{ bg: "#3B82F6", text: "#FFFFFF", name: "Blue" },
@@ -70,6 +70,112 @@ export function getInitial(name: string): string {
 
 export function getRandomName(): string {
 	return names[Math.floor(Math.random() * names.length)];
+}
+
+export function formatBytes(bytes: number): string {
+	if (bytes === 0) return "0 B";
+	const k = 1024;
+	const sizes = ["B", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+// -------------------------------------------------------------
+// Real Free File & Image Processing (Client-Side Encoding)
+// -------------------------------------------------------------
+
+export function readFileAsDataUrl(file: File | Blob): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result as string);
+		reader.onerror = (e) => reject(e);
+		reader.readAsDataURL(file);
+	});
+}
+
+/**
+ * Free Smart Image Compressor:
+ * Resizes large photos client-side to max 1280px maintaining aspect ratio
+ * and encodes as lightweight JPEG/WebP data URL (< 150KB) for instant edge transmission.
+ */
+export async function compressImageFile(
+	file: File,
+	maxDimension = 1280,
+	quality = 0.82,
+): Promise<{ dataUrl: string; size: string; name: string }> {
+	const rawDataUrl = await readFileAsDataUrl(file);
+
+	return new Promise((resolve) => {
+		const img = new Image();
+		img.onload = () => {
+			let width = img.width;
+			let height = img.height;
+
+			if (width > maxDimension || height > maxDimension) {
+				if (width > height) {
+					height = Math.round((height * maxDimension) / width);
+					width = maxDimension;
+				} else {
+					width = Math.round((width * maxDimension) / height);
+					height = maxDimension;
+				}
+			}
+
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			const ctx = canvas.getContext("2d");
+
+			if (ctx) {
+				ctx.imageSmoothingEnabled = true;
+				ctx.imageSmoothingQuality = "high";
+				ctx.drawImage(img, 0, 0, width, height);
+
+				// Export as JPEG Data URL
+				const compressedUrl = canvas.toDataURL("image/jpeg", quality);
+				// Calculate approximate compressed size in bytes
+				const base64Len = compressedUrl.length - compressedUrl.indexOf(",") - 1;
+				const byteSize = Math.round((base64Len * 3) / 4);
+
+				resolve({
+					dataUrl: compressedUrl,
+					size: formatBytes(byteSize),
+					name: file.name,
+				});
+			} else {
+				// Fallback to raw if canvas fails
+				resolve({
+					dataUrl: rawDataUrl,
+					size: formatBytes(file.size),
+					name: file.name,
+				});
+			}
+		};
+
+		img.onerror = () => {
+			resolve({
+				dataUrl: rawDataUrl,
+				size: formatBytes(file.size),
+				name: file.name,
+			});
+		};
+
+		img.src = rawDataUrl;
+	});
+}
+
+/**
+ * Read any document or file (PDF, Doc, JSON, etc.) as Data URL for free instant sharing.
+ */
+export async function processDocumentFile(
+	file: File,
+): Promise<{ dataUrl: string; size: string; name: string }> {
+	const dataUrl = await readFileAsDataUrl(file);
+	return {
+		dataUrl,
+		size: formatBytes(file.size),
+		name: file.name,
+	};
 }
 
 // Storage helpers for Recent Rooms

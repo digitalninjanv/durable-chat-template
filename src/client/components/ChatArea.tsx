@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
-import type { ChatMessage, Reaction, ReplyInfo } from "../types";
+import type { ChatMessage, Reaction, ReplyInfo, Attachment } from "../types";
 import { MessageItem } from "./MessageItem";
-import { formatDateHeader } from "../utils/helpers";
+import { formatDateHeader, compressImageFile, processDocumentFile } from "../utils/helpers";
 import {
 	PinIcon,
 	ArrowDownIcon,
@@ -10,6 +10,8 @@ import {
 	CloudflareIcon,
 	CodeIcon,
 	DatabaseIcon,
+	ImageIcon,
+	FileTextIcon,
 } from "./Icons";
 
 interface ChatAreaProps {
@@ -23,6 +25,8 @@ interface ChatAreaProps {
 	onAddReaction: (message: ChatMessage, emoji: string) => void;
 	onImageClick: (url: string) => void;
 	onSendPrompt: (promptText: string) => void;
+	onSendAttachment: (attachment: Attachment, caption?: string) => void;
+	onError: (msg: string) => void;
 	highlightedMsgId: string | null;
 	pinnedOnlyFilter?: boolean;
 }
@@ -53,6 +57,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 	onAddReaction,
 	onImageClick,
 	onSendPrompt,
+	onSendAttachment,
+	onError,
 	highlightedMsgId,
 	pinnedOnlyFilter = false,
 }) => {
@@ -60,6 +66,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const [showScrollBottom, setShowScrollBottom] = useState(false);
 	const [localHighlightedId, setLocalHighlightedId] = useState<string | null>(null);
+	const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+	const dragCounterRef = useRef(0);
 
 	// Get latest pinned message
 	const latestPinned = messages.slice().reverse().find((m) => m.pinned);
@@ -105,8 +114,100 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 		setShowScrollBottom(false);
 	};
 
+	// Drag and Drop File Handlers
+	const handleDragEnter = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounterRef.current += 1;
+		if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+			setIsDraggingOver(true);
+		}
+	};
+
+	const handleDragLeave = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounterRef.current -= 1;
+		if (dragCounterRef.current <= 0) {
+			setIsDraggingOver(false);
+			dragCounterRef.current = 0;
+		}
+	};
+
+	const handleDragOver = (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+	};
+
+	const handleDrop = async (e: React.DragEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setIsDraggingOver(false);
+		dragCounterRef.current = 0;
+
+		const files = e.dataTransfer.files;
+		if (!files || files.length === 0) return;
+
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+
+			if (file.type.startsWith("image/")) {
+				try {
+					const { dataUrl, size, name } = await compressImageFile(file);
+					onSendAttachment({
+						type: "image",
+						url: dataUrl,
+						name,
+						size,
+					});
+				} catch (err) {
+					console.error("Error processing dropped image:", err);
+					onError("Gagal memproses gambar.");
+				}
+			} else {
+				if (file.size > 3.5 * 1024 * 1024) {
+					onError(`Berkas "${file.name}" melebihi batas 3.5MB.`);
+					continue;
+				}
+				try {
+					const { dataUrl, size, name } = await processDocumentFile(file);
+					onSendAttachment({
+						type: "file",
+						url: dataUrl,
+						name,
+						size,
+					});
+				} catch (err) {
+					console.error("Error processing dropped file:", err);
+					onError("Gagal memproses berkas.");
+				}
+			}
+		}
+	};
+
 	return (
-		<div className="chat-area-viewport">
+		<div
+			className="chat-area-viewport"
+			onDragEnter={handleDragEnter}
+			onDragLeave={handleDragLeave}
+			onDragOver={handleDragOver}
+			onDrop={handleDrop}
+		>
+			{/* Drag & Drop Visual Overlay */}
+			{isDraggingOver && (
+				<div className="drag-drop-overlay">
+					<div className="drag-drop-card">
+						<div className="drag-drop-icon">
+							<ImageIcon size={36} />
+						</div>
+						<div className="drag-drop-title">Lepaskan Berkas di Sini</div>
+						<div className="drag-drop-sub">
+							Foto atau dokumen akan langsung dikompresi dan dikirim ke saluran #{room}
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Top Pinned Banner */}
 			{latestPinned && !pinnedOnlyFilter && (
 				<div className="pinned-message-banner">
@@ -158,7 +259,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 							Selamat datang di #{room}
 						</h3>
 						<p className="empty-state-desc">
-							Ruangan ini terhubung langsung ke instans <strong>Durable Object SQLite</strong> edge regional. Semua pesan dan interaksi disinkronkan secara real-time.
+							Ruangan ini terhubung langsung ke instans <strong>Durable Object SQLite</strong> edge regional. Semua pesan, foto, berkas, dan reaksi disinkronkan secara real-time.
 						</p>
 
 						<div className="starter-prompts-container">

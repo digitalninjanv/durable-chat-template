@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import type { ReplyInfo, ChatMessage } from "../types";
+import type { ReplyInfo, ChatMessage, Attachment } from "../types";
+import { compressImageFile } from "../utils/helpers";
 import {
 	SendIcon,
 	PaperclipIcon,
@@ -16,6 +17,7 @@ import {
 interface MessageInputProps {
 	currentUserName: string;
 	onSendMessage: (text: string) => void;
+	onSendAttachment: (attachment: Attachment, caption?: string) => void;
 	activeReply: ReplyInfo | null;
 	onCancelReply: () => void;
 	editingMessage: ChatMessage | null;
@@ -30,6 +32,7 @@ const COMMON_EMOJIS = ["😀", "🔥", "👍", "🚀", "❤️", "🎉", "💡",
 export const MessageInput: React.FC<MessageInputProps> = ({
 	currentUserName,
 	onSendMessage,
+	onSendAttachment,
 	activeReply,
 	onCancelReply,
 	editingMessage,
@@ -101,6 +104,38 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 		} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
 			e.preventDefault();
 			insertFormatting("*", "*");
+		}
+	};
+
+	// Handle Image Paste from Clipboard (Ctrl+V)
+	const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+		const items = e.clipboardData?.items;
+		if (!items) return;
+
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			if (item.type.indexOf("image") !== -1) {
+				const file = item.getAsFile();
+				if (file) {
+					e.preventDefault();
+					try {
+						const { dataUrl, size, name } = await compressImageFile(file);
+						onSendAttachment(
+							{
+								type: "image",
+								url: dataUrl,
+								name: name || `Tangkapan_Layar_${Date.now()}.png`,
+								size,
+							},
+							text.trim() || undefined,
+						);
+						setText("");
+					} catch (err) {
+						console.error("Failed to paste image:", err);
+					}
+					return;
+				}
+			}
 		}
 	};
 
@@ -200,7 +235,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 							type="button"
 							className="format-btn"
 							onClick={onOpenAttachmentModal}
-							title="Lampirkan Gambar atau Berkas"
+							title="Lampirkan Gambar atau Berkas (Foto, PDF, Suara)"
 						>
 							<PaperclipIcon size={16} />
 						</button>
@@ -307,11 +342,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 						placeholder={
 							editingMessage
 								? "Perbarui teks pesan..."
-								: `Ketik pesan sebagai ${currentUserName}... (Shift+Enter untuk baris baru)`
+								: `Ketik pesan sebagai ${currentUserName}... (Shift+Enter baris baru, paste gambar didukung)`
 						}
 						value={text}
 						onChange={handleChange}
 						onKeyDown={handleKeyDown}
+						onPaste={handlePaste}
 					/>
 
 					<button

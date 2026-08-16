@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { ChatMessage, Reaction, Attachment } from "../types";
 import { MarkdownContent } from "../utils/markdown";
 import {
@@ -14,12 +14,11 @@ import {
 	TrashIcon,
 	CopyIcon,
 	PinIcon,
-	MoreHorizontalIcon,
 	PlayIcon,
 	PauseIcon,
 	FileTextIcon,
 	ImageIcon,
-	SmileIcon,
+	DownloadIcon,
 } from "./Icons";
 
 interface MessageItemProps {
@@ -50,7 +49,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 	isHighlighted,
 }) => {
 	const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-	const [showMenu, setShowMenu] = useState(false);
+	const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+	const [audioDuration, setAudioDuration] = useState(0);
+	const audioRef = useRef<HTMLAudioElement | null>(null);
+
 	const isOwn = message.user === currentUserName;
 	const avatarStyle = {
 		backgroundColor: getAvatarColor(message.user).bg,
@@ -60,12 +62,35 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 	const handleCopy = (e: React.MouseEvent) => {
 		e.stopPropagation();
 		navigator.clipboard.writeText(message.content);
-		setShowMenu(false);
 	};
 
 	const toggleAudio = (e: React.MouseEvent) => {
 		e.stopPropagation();
-		setIsPlayingAudio(!isPlayingAudio);
+		if (!audioRef.current) return;
+		if (isPlayingAudio) {
+			audioRef.current.pause();
+			setIsPlayingAudio(false);
+		} else {
+			audioRef.current.play().then(() => {
+				setIsPlayingAudio(true);
+			}).catch((err) => {
+				console.warn("Audio playback issue:", err);
+			});
+		}
+	};
+
+	const handleAudioEnded = () => {
+		setIsPlayingAudio(false);
+		setAudioCurrentTime(0);
+	};
+
+	const handleAudioTimeUpdate = () => {
+		if (audioRef.current) {
+			setAudioCurrentTime(audioRef.current.currentTime);
+			if (!audioDuration && audioRef.current.duration) {
+				setAudioDuration(audioRef.current.duration);
+			}
+		}
 	};
 
 	return (
@@ -131,6 +156,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 						{/* Attachment Rendering */}
 						{message.attachment && (
 							<div className="message-attachment-box">
+								{/* Image Attachment */}
 								{message.attachment.type === "image" && (
 									<div
 										className="attachment-image-card"
@@ -144,11 +170,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 										/>
 										<div className="image-zoom-overlay">
 											<ImageIcon size={18} />
-											<span>Perbesar</span>
+											<span>Klik untuk Perbesar</span>
 										</div>
 									</div>
 								)}
 
+								{/* Document / File Attachment with Instant Download */}
 								{message.attachment.type === "file" && (
 									<div className="attachment-file-card">
 										<div className="file-icon-box">
@@ -160,11 +187,28 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 												{message.attachment.size || "Berkas"}
 											</div>
 										</div>
+										<a
+											href={message.attachment.url}
+											download={message.attachment.name || "file"}
+											className="file-download-action-btn"
+											title="Unduh Berkas Ini"
+											onClick={(e) => e.stopPropagation()}
+										>
+											<DownloadIcon size={16} />
+										</a>
 									</div>
 								)}
 
+								{/* Audio Voice Note with Real HTML5 Audio */}
 								{message.attachment.type === "audio" && (
 									<div className="attachment-audio-card">
+										<audio
+											ref={audioRef}
+											src={message.attachment.url}
+											onEnded={handleAudioEnded}
+											onTimeUpdate={handleAudioTimeUpdate}
+											preload="metadata"
+										/>
 										<button
 											type="button"
 											className="audio-play-btn"
@@ -173,7 +217,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 										>
 											{isPlayingAudio ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
 										</button>
-										<div className="audio-waveform-container">
+										<div className="audio-waveform-container" onClick={toggleAudio}>
 											<div className={`waveform-bar bar-1 ${isPlayingAudio ? "animating" : ""}`} />
 											<div className={`waveform-bar bar-2 ${isPlayingAudio ? "animating" : ""}`} />
 											<div className={`waveform-bar bar-3 ${isPlayingAudio ? "animating" : ""}`} />
@@ -183,7 +227,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 											<div className={`waveform-bar bar-7 ${isPlayingAudio ? "animating" : ""}`} />
 										</div>
 										<span className="audio-duration">
-											{message.attachment.duration || "0:15"}
+											{isPlayingAudio && audioCurrentTime > 0
+												? `0:${Math.floor(audioCurrentTime) < 10 ? "0" : ""}${Math.floor(audioCurrentTime)}`
+												: message.attachment.duration || "0:15"}
 										</span>
 									</div>
 								)}
