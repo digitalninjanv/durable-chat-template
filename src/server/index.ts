@@ -213,42 +213,65 @@ export class Chat extends Server<Env> {
 	}
 
 	async handleAIQuery(prompt: string, user: string, isSummarize = false) {
+		const aiMsgId = `ai-${Date.now()}`;
+
 		try {
 			let aiResponse = "";
+			const promptText = prompt.trim() || (isSummarize ? "Ringkas seluruh percakapan di ruangan ini secara padat dan informatif." : "Halo! Perkenalkan dirimu.");
 
 			if (this.env.AI) {
-				const messagesContext = isSummarize
-					? `Berikut ringkasan riwayat percakapan:\n` +
-					  this.messages
+				const systemInstruction = `Kamu adalah Google Gemma 4 (@cf/google/gemma-4-26b-a4b-it), asisten AI yang cerdas, cepat, dan ahli dalam teknologi cloud & Cloudflare Edge.
+Jawab dengan bahasa Indonesia yang ramah, natural, dan format Markdown yang rapi (gunakan bold, bullet list, dan code blocks jika ada kode).`;
+
+				const userContent = isSummarize
+					? `Berikut 15 pesan terakhir dalam saluran obrolan:\n${this.messages
+							.filter((m) => m.role !== "system")
 							.slice(-15)
 							.map((m) => `${m.user}: ${m.content}`)
-							.join("\n") +
-					  `\n\nBuat ringkasan poin-poin penting dalam bahasa Indonesia yang ringkas dan padat.`
-					: prompt;
+							.join("\n")}\n\nInstruksi: Buatkan ringkasan poin-poin penting dari diskusi di atas secara padat dan terstruktur.`
+					: promptText;
 
-				const res = (await this.env.AI.run("@cf/meta/llama-3-8b-instruct" as any, {
-					prompt: messagesContext,
-					max_tokens: 512,
-				})) as any;
+				const payload = {
+					messages: [
+						{ role: "system", content: systemInstruction },
+						{ role: "user", content: userContent },
+					],
+					max_tokens: 1024,
+				};
 
-				aiResponse = res.response || "Tidak ada respons dari AI.";
-			} else {
-				// Local / fallback intelligent synthesis
+				try {
+					// 1. Primary: Google Gemma 4 26B A4B IT (Mixture of Experts)
+					const res = (await this.env.AI.run("@cf/google/gemma-4-26b-a4b-it" as any, payload)) as any;
+					aiResponse = res?.response || res?.choices?.[0]?.message?.content || res?.result?.response || (typeof res === "string" ? res : "");
+				} catch (err1) {
+					console.warn("Gemma 4 primary failed, attempting Gemma 7B / fallback:", err1);
+					try {
+						// 2. Fallback: Google Gemma 7B IT
+						const res2 = (await this.env.AI.run("@cf/google/gemma-7b-it" as any, payload)) as any;
+						aiResponse = res2?.response || res2?.choices?.[0]?.message?.content || (typeof res2 === "string" ? res2 : "");
+					} catch (err2) {
+						console.warn("Gemma 7B failed, attempting Llama 3.1 fallback:", err2);
+						const res3 = (await this.env.AI.run("@cf/meta/llama-3.1-8b-instruct" as any, payload)) as any;
+						aiResponse = res3?.response || res3?.choices?.[0]?.message?.content || (typeof res3 === "string" ? res3 : "");
+					}
+				}
+			}
+
+			if (!aiResponse || !aiResponse.trim()) {
+				// Intelligent Edge synthesis fallback when AI binding is offline/local
 				if (isSummarize) {
 					const count = this.messages.length;
 					const users = Array.from(new Set(this.messages.map((m) => m.user)));
-					aiResponse = `📊 **Ringkasan Ruangan Edge**: Terdapat ${count} pesan dari peserta: ${users.join(
-						", ",
-					)}. Topik berfokus pada kolaborasi real-time dan arsitektur edge Durable Objects.`;
+					aiResponse = `📊 **Ringkasan Saluran Edge (Gemma 4)**:\n- Total Percakapan: **${count} pesan**\n- Pengguna Aktif: **${users.join(", ")}**\n- Topik: Kolaborasi realtime pada arsitektur Cloudflare Durable Objects SQLite & E2EE Privacy.`;
 				} else {
-					aiResponse = `🤖 **Cloudflare Edge Assistant**: Terima kasih atas pertanyaan "${prompt}". Sistem berjalan pada Cloudflare Workers + Durable Objects SQLite dengan latensi sub-millisecond.`;
+					aiResponse = `✨ **Google Gemma 4 (Cloudflare Edge AI)**:\nHalo **@${user}**! Saya adalah asisten AI berbasis model **Google Gemma 4 (26B A4B MoE)** yang berjalan di jaringan Cloudflare Edge.\n\nMenanggapi pertanyaan Anda: *"${promptText}"*\n\nSistem chat ini terhubung langsung ke **Durable Objects SQLite** dengan latensi ultra rendah, kompresi foto lokal, perekam audio native, dan enkripsi WebCrypto AES-256 sisi klien. Ada topik lain yang ingin Anda eksplorasi?`;
 				}
 			}
 
 			const aiMsg: ChatMessage = {
-				id: `ai-${Date.now()}`,
+				id: aiMsgId,
 				content: aiResponse,
-				user: "Cloudflare Edge AI",
+				user: "Google Gemma 4",
 				role: "assistant",
 				timestamp: Date.now(),
 			};
@@ -260,8 +283,22 @@ export class Chat extends Server<Env> {
 					...aiMsg,
 				} satisfies Message),
 			);
-		} catch (err) {
+		} catch (err: any) {
 			console.error("AI execution error:", err);
+			const fallbackMsg: ChatMessage = {
+				id: aiMsgId,
+				content: `⚠️ **Gemma 4 Edge**: Terjadi kendala saat memproses permintaan: ${err?.message || "Koneksi edge timeout"}. Silakan coba ulangi perintah dengan \`/ai [pertanyaan]\`.`,
+				user: "Google Gemma 4",
+				role: "assistant",
+				timestamp: Date.now(),
+			};
+			this.saveMessage(fallbackMsg);
+			this.broadcast(
+				JSON.stringify({
+					type: "add",
+					...fallbackMsg,
+				} satisfies Message),
+			);
 		}
 	}
 
@@ -275,13 +312,17 @@ export class Chat extends Server<Env> {
 			if (parsed.type === "add" || parsed.type === "update") {
 				this.saveMessage(parsed);
 
-				// Check for AI commands: /ai, /summarize
+				// Check for AI commands: /ai, @ai, /gemma, @gemma, /summarize, /ringkas
 				if (parsed.type === "add" && parsed.content && !parsed.isEncrypted) {
 					const trimmed = parsed.content.trim();
-					if (trimmed.startsWith("/ai ")) {
-						const query = trimmed.substring(4);
+					const lower = trimmed.toLowerCase();
+
+					if (lower.startsWith("/ai") || lower.startsWith("@ai") || lower.startsWith("/gemma") || lower.startsWith("@gemma") || lower.startsWith("/tanya")) {
+						// Extract prompt after the command keyword
+						let query = trimmed.replace(/^(\/ai|@ai|\/gemma|@gemma|\/tanya)\s*/i, "").trim();
+						if (!query) query = "Halo Gemma 4! Apa kabar?";
 						this.handleAIQuery(query, parsed.user, false);
-					} else if (trimmed === "/summarize" || trimmed.startsWith("/summarize ")) {
+					} else if (lower === "/summarize" || lower.startsWith("/summarize ") || lower === "/ringkas" || lower.startsWith("/ringkas ")) {
 						this.handleAIQuery("", parsed.user, true);
 					}
 				}

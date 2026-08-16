@@ -324,7 +324,16 @@ function DurableChatApp() {
 	const handleSendMessage = useCallback(
 		async (text: string, ttl: TTLOption = 0, burnOnRead = false) => {
 			const expiresAt = ttl > 0 ? Date.now() + ttl * 1000 : undefined;
-			const shouldEncrypt = isE2EE;
+			const isAICommand =
+				text.trim().startsWith("/ai") ||
+				text.trim().startsWith("@ai") ||
+				text.trim().startsWith("/gemma") ||
+				text.trim().startsWith("@gemma") ||
+				text.trim().startsWith("/summarize") ||
+				text.trim().startsWith("/ringkas") ||
+				text.trim().startsWith("/tanya");
+
+			const shouldEncrypt = isE2EE && !isAICommand;
 
 			const cipherOrPlain = shouldEncrypt
 				? await encryptText(text, e2eeKey)
@@ -723,7 +732,7 @@ function DurableChatApp() {
 					onTriggerDecoy={() => setIsDecoyActive(true)}
 					onTriggerNuke={() => setIsNukeModalOpen(true)}
 					onOpenAIHelp={() => {
-						handleSendMessage("/ai Ringkas topik utama dalam sistem Cloudflare Durable Objects ini");
+						handleSendMessage("/ai Halo Gemma 4! Tolong jelaskan arsitektur edge Durable Objects & fitur sistem ini.");
 					}}
 					theme={theme}
 					onToggleTheme={toggleTheme}

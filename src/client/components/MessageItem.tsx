@@ -175,7 +175,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 					)}
 					{isOwn && <span className="sender-display-name own-label">Anda</span>}
 
-					{isAssistant && <span className="role-assistant-tag">Edge AI</span>}
+					{isAssistant && <span className="role-assistant-tag">Gemma 4</span>}
 
 					{message.isEncrypted && (
 						<span className="e2ee-encrypted-tag" title="Pesan Terenkripsi E2EE">
