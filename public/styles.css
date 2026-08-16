@@ -1172,6 +1172,70 @@ html, body, #root {
 	border-top-left-radius: var(--radius-sm);
 }
 
+/* In-chat live typing row */
+.in-chat-typing-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 6px 0;
+	animation: fadeIn 0.2s ease;
+}
+
+.in-chat-typing-avatar {
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-full);
+	background: var(--brand-primary);
+	color: #FFFFFF;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 700;
+	font-size: 13px;
+	flex-shrink: 0;
+}
+
+.in-chat-typing-bubble {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	background: var(--bg-surface);
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-lg);
+	border-top-left-radius: var(--radius-sm);
+	box-shadow: var(--shadow-sm);
+}
+
+.typing-dots-anim {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.typing-dots-anim .dot {
+	width: 6px;
+	height: 6px;
+	background: var(--brand-primary);
+	border-radius: var(--radius-full);
+	animation: bounceDot 1.4s infinite ease-in-out both;
+}
+
+.typing-dots-anim .dot-1 { animation-delay: -0.32s; }
+.typing-dots-anim .dot-2 { animation-delay: -0.16s; }
+.typing-dots-anim .dot-3 { animation-delay: 0s; }
+
+@keyframes bounceDot {
+	0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+	40% { transform: scale(1.2); opacity: 1; }
+}
+
+.typing-user-text {
+	font-size: 12px;
+	color: var(--text-secondary);
+	font-weight: 500;
+}
+
 /* Dead Drop Gate */
 .dead-drop-gate-box {
 	padding: 12px 16px;

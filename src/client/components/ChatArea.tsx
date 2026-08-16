@@ -12,6 +12,7 @@ import {
 	DatabaseIcon,
 	ImageIcon,
 	FileTextIcon,
+	BotIcon,
 } from "./Icons";
 
 interface ChatAreaProps {
@@ -30,20 +31,21 @@ interface ChatAreaProps {
 	highlightedMsgId: string | null;
 	pinnedOnlyFilter?: boolean;
 	e2eePassphrase?: string;
+	typingUsers?: Set<string>;
 }
 
 const STARTER_PROMPTS = [
 	{
-		title: "💡 Arsitektur Cloudflare",
-		text: "Bagaimana cara kerja SQLite storage di dalam Durable Objects untuk chat realtime?",
+		title: "🤖 Tanya Google Gemma 4",
+		text: "/ai Halo Gemma 4! Apa saja keunggulan model Gemma 4 26B A4B MoE di Cloudflare Edge?",
+	},
+	{
+		title: "📊 Minta Ringkasan AI",
+		text: "/summarize",
 	},
 	{
 		title: "💻 Kode Contoh Worker",
 		text: "```typescript\nexport class ChatServer extends Server {\n  onMessage(conn, msg) {\n    this.broadcast(msg);\n  }\n}\n```",
-	},
-	{
-		title: "🚀 Status Edge Jaringan",
-		text: "Halo tim! Pengujian performa WebSocket edge sub-millisecond berhasil dijalankan. 🌐⚡",
 	},
 ];
 
@@ -63,6 +65,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 	highlightedMsgId,
 	pinnedOnlyFilter = false,
 	e2eePassphrase,
+	typingUsers,
 }) => {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -97,12 +100,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 		}
 	}, [highlightedMsgId]);
 
-	// Auto scroll to bottom on new message
+	// Auto scroll to bottom on new message or when typing starts
 	useEffect(() => {
 		if (!showScrollBottom) {
 			messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 		}
-	}, [messages.length]);
+	}, [messages.length, typingUsers?.size]);
 
 	const handleScroll = () => {
 		const el = scrollContainerRef.current;
@@ -187,6 +190,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 		}
 	};
 
+	const activeTypingList = typingUsers ? Array.from(typingUsers) : [];
+
 	return (
 		<div
 			className="chat-area-viewport"
@@ -261,11 +266,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 							Selamat datang di #{room}
 						</h3>
 						<p className="empty-state-desc">
-							Ruangan ini terhubung langsung ke instans <strong>Durable Object SQLite</strong> edge regional. Semua pesan, foto, berkas, dan reaksi disinkronkan secara real-time.
+							Ruangan ini terhubung langsung ke instans <strong>Durable Object SQLite</strong> edge regional dengan integrasi <strong>Google Gemma 4 AI</strong>.
 						</p>
 
 						<div className="starter-prompts-container">
-							<span className="starter-prompts-label">Mulai percakapan dengan:</span>
+							<span className="starter-prompts-label">Mulai percakapan atau panggil AI:</span>
 							<div className="starter-prompts-grid">
 								{STARTER_PROMPTS.map((p, idx) => (
 									<button
@@ -317,6 +322,30 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 						);
 					})
 				)}
+
+				{/* In-stream Live Typing Indicator */}
+				{activeTypingList.length > 0 && (
+					<div className="in-chat-typing-row">
+						<div className="in-chat-typing-avatar">
+							{activeTypingList.some((u) => u.toLowerCase().includes("gemma") || u.toLowerCase().includes("ai")) ? (
+								<BotIcon size={16} />
+							) : (
+								activeTypingList[0][0].toUpperCase()
+							)}
+						</div>
+						<div className="in-chat-typing-bubble">
+							<div className="typing-dots-anim">
+								<span className="dot dot-1" />
+								<span className="dot dot-2" />
+								<span className="dot dot-3" />
+							</div>
+							<span className="typing-user-text">
+								{activeTypingList.join(", ")} sedang mengetik...
+							</span>
+						</div>
+					</div>
+				)}
+
 				<div ref={messagesEndRef} />
 			</div>
 

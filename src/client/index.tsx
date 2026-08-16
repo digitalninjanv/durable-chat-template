@@ -769,6 +769,7 @@ function DurableChatApp() {
 					highlightedMsgId={highlightedMsgId}
 					pinnedOnlyFilter={isShowingPinnedOnly}
 					e2eePassphrase={e2eeKey}
+					typingUsers={typingUsers}
 				/>
 
 				<MessageInput
