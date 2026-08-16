@@ -10,6 +10,7 @@ export type Attachment = {
 	name: string;
 	size?: string;
 	duration?: string;
+	isEncrypted?: boolean;
 };
 
 export type Reaction = {
@@ -22,13 +23,16 @@ export type ChatMessage = {
 	id: string;
 	content: string;
 	user: string;
-	role: "user" | "assistant";
+	role: "user" | "assistant" | "system";
 	timestamp?: number;
 	replyTo?: ReplyInfo | null;
 	edited?: boolean;
 	pinned?: boolean;
 	attachment?: Attachment | null;
 	reactions?: Reaction[];
+	isEncrypted?: boolean;
+	expiresAt?: number;
+	burnOnRead?: boolean;
 };
 
 export type Message =
@@ -37,30 +41,46 @@ export type Message =
 			id: string;
 			content: string;
 			user: string;
-			role: "user" | "assistant";
+			role: "user" | "assistant" | "system";
 			timestamp?: number;
 			replyTo?: ReplyInfo | null;
 			edited?: boolean;
 			pinned?: boolean;
 			attachment?: Attachment | null;
 			reactions?: Reaction[];
+			isEncrypted?: boolean;
+			expiresAt?: number;
+			burnOnRead?: boolean;
 	  }
 	| {
 			type: "update";
 			id: string;
 			content: string;
 			user: string;
-			role: "user" | "assistant";
+			role: "user" | "assistant" | "system";
 			timestamp?: number;
 			replyTo?: ReplyInfo | null;
 			edited?: boolean;
 			pinned?: boolean;
 			attachment?: Attachment | null;
 			reactions?: Reaction[];
+			isEncrypted?: boolean;
+			expiresAt?: number;
+			burnOnRead?: boolean;
 	  }
 	| {
 			type: "delete";
 			id: string;
+	  }
+	| {
+			type: "nuke";
+			user: string;
+	  }
+	| {
+			type: "scratchpad";
+			content: string;
+			updatedBy: string;
+			updatedAt: number;
 	  }
 	| {
 			type: "typing";
@@ -70,33 +90,33 @@ export type Message =
 	| {
 			type: "all";
 			messages: ChatMessage[];
+			scratchpad?: string;
 	  };
 
 export const names = [
-	"Alice",
-	"Bob",
-	"Charlie",
-	"David",
-	"Eve",
-	"Frank",
-	"Grace",
-	"Heidi",
-	"Ivan",
-	"Judy",
-	"Kevin",
-	"Linda",
-	"Mallory",
-	"Nancy",
-	"Oscar",
-	"Peggy",
-	"Quentin",
-	"Randy",
-	"Steve",
-	"Trent",
-	"Ursula",
-	"Victor",
-	"Walter",
-	"Xavier",
-	"Yvonne",
-	"Zoe",
+	"Cipher",
+	"Vortex",
+	"Shadow",
+	"Nexus",
+	"Phantom",
+	"Specter",
+	"Echo",
+	"Matrix",
+	"Apex",
+	"Zero",
+	"Titan",
+	"Nova",
+	"Zenith",
+	"Aegis",
+	"Sentinel",
+	"Quantum",
+	"Orion",
+	"Hyperion",
+	"Helix",
+	"Valkyrie",
+	"Cobalt",
+	"Krypton",
+	"Mirage",
+	"Vector",
+	"Solstice",
 ];

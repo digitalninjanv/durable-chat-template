@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Cloudflare Durable Chat — Production Design System & Tokens
+   Cloudflare Durable Chat — Production Design System & Tokens (2026)
    ========================================================================== */
 
 :root,
@@ -168,10 +168,10 @@ html, body, #root {
 }
 
 /* ==========================================================================
-   Sidebar Navigation
+   Sidebar Navigation & Categories
    ========================================================================== */
 .app-sidebar {
-	width: 280px;
+	width: 290px;
 	height: 100%;
 	background-color: var(--bg-sidebar);
 	border-right: 1px solid var(--border-subtle);
@@ -334,6 +334,43 @@ html, body, #root {
 	color: var(--text-primary);
 }
 
+/* Category Tab Switcher */
+.sidebar-category-nav {
+	display: flex;
+	gap: 4px;
+	padding: 0 14px 8px 14px;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.category-tab-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 6px 4px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-secondary);
+	font-size: 11.5px;
+	font-weight: 600;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.category-tab-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.category-tab-btn.active {
+	background: var(--bg-surface);
+	border-color: var(--border-medium);
+	color: var(--brand-primary);
+	box-shadow: var(--shadow-sm);
+}
+
 /* Channels Section */
 .sidebar-section-container {
 	flex: 1;
@@ -352,7 +389,7 @@ html, body, #root {
 }
 
 .section-label {
-	font-size: 11px;
+	font-size: 10.5px;
 	font-weight: 700;
 	color: var(--text-muted);
 	letter-spacing: 0.5px;
@@ -449,6 +486,49 @@ html, body, #root {
 	height: 16px;
 	background-color: var(--brand-primary);
 	border-radius: var(--radius-full);
+}
+
+.sidebar-empty-hint {
+	font-size: 12px;
+	color: var(--text-muted);
+	padding: 16px 10px;
+	text-align: center;
+}
+
+/* Stealth Quick Action Bar */
+.sidebar-stealth-bar {
+	display: flex;
+	gap: 6px;
+	padding: 8px 14px;
+	border-top: 1px solid var(--border-subtle);
+}
+
+.stealth-action-pill {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 6px 4px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	color: var(--text-secondary);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.stealth-action-pill:hover {
+	background: var(--bg-active);
+	color: var(--text-primary);
+}
+
+.stealth-action-pill.danger:hover {
+	background: var(--danger-subtle);
+	border-color: var(--danger);
+	color: var(--danger);
 }
 
 /* Sidebar Footer & Tech Spec */
@@ -594,6 +674,11 @@ html, body, #root {
 	color: var(--brand-primary);
 }
 
+.header-btn-icon.nuke-trigger-btn:hover {
+	background: var(--danger-subtle);
+	color: var(--danger);
+}
+
 .sidebar-toggle-btn {
 	display: none;
 }
@@ -625,6 +710,32 @@ html, body, #root {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.e2ee-header-pill {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-full);
+	color: var(--text-secondary);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.e2ee-header-pill:hover {
+	background: var(--bg-active);
+	color: var(--text-primary);
+}
+
+.e2ee-header-pill.active {
+	background: var(--success-subtle);
+	border-color: var(--success);
+	color: var(--success);
 }
 
 .channel-copy-btn {
@@ -924,6 +1035,11 @@ html, body, #root {
 	flex-direction: row-reverse;
 }
 
+.message-row.is-assistant-row {
+	align-self: flex-start;
+	max-width: 88%;
+}
+
 .message-row.is-highlighted {
 	animation: pulseHighlight 2s ease-out;
 }
@@ -972,6 +1088,39 @@ html, body, #root {
 	color: var(--text-secondary);
 }
 
+.role-assistant-tag {
+	font-size: 10px;
+	font-weight: 700;
+	color: #60A5FA;
+	background: rgba(37, 99, 235, 0.2);
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+}
+
+.e2ee-encrypted-tag {
+	font-size: 10px;
+	font-weight: 700;
+	color: var(--success);
+	background: var(--success-subtle);
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.ttl-countdown-tag {
+	font-size: 10px;
+	font-weight: 700;
+	color: #F59E0B;
+	background: rgba(245, 158, 11, 0.15);
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+
 .message-timestamp {
 	font-size: 11px;
 	color: var(--text-muted);
@@ -1014,6 +1163,63 @@ html, body, #root {
 	background-color: var(--bubble-outgoing);
 	color: var(--bubble-outgoing-text);
 	border-top-right-radius: var(--radius-sm);
+}
+
+.bubble-assistant {
+	background-color: var(--bg-surface-elevated);
+	border: 1px solid var(--border-medium);
+	color: var(--text-primary);
+	border-top-left-radius: var(--radius-sm);
+}
+
+/* Dead Drop Gate */
+.dead-drop-gate-box {
+	padding: 12px 16px;
+	background: rgba(249, 115, 22, 0.12);
+	border: 1px dashed var(--brand-accent);
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	text-align: center;
+}
+
+.dead-drop-icon {
+	color: var(--brand-accent);
+	margin-bottom: 4px;
+}
+
+.dead-drop-title {
+	font-weight: 700;
+	font-size: 13px;
+	color: var(--brand-accent);
+}
+
+.dead-drop-hint {
+	font-size: 11px;
+	color: var(--text-secondary);
+}
+
+/* System Notice Bubble */
+.system-notice-row {
+	display: flex;
+	justify-content: center;
+	margin: 8px 0;
+}
+
+.system-notice-bubble {
+	padding: 6px 14px;
+	background: rgba(239, 68, 68, 0.1);
+	border: 1px solid rgba(239, 68, 68, 0.25);
+	border-radius: var(--radius-full);
+	color: #FCA5A5;
+	font-size: 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.system-time {
+	font-size: 10px;
+	color: var(--text-muted);
 }
 
 /* Quoted Reply Box */
@@ -1775,6 +1981,19 @@ html, body, #root {
 	color: var(--brand-primary);
 }
 
+.ai-quick-btn {
+	width: auto;
+	padding: 0 6px;
+	gap: 4px;
+	background: var(--brand-primary-subtle);
+	color: var(--brand-primary);
+	font-weight: 700;
+}
+
+.ai-btn-text {
+	font-size: 11px;
+}
+
 .format-separator {
 	width: 1px;
 	height: 16px;
@@ -1785,6 +2004,78 @@ html, body, #root {
 .format-code-block-label {
 	font-family: var(--font-mono);
 	font-size: 11px;
+	font-weight: 600;
+}
+
+/* TTL Picker Popover */
+.ttl-picker-container {
+	position: relative;
+}
+
+.ttl-btn {
+	width: auto;
+	padding: 0 6px;
+	gap: 4px;
+}
+
+.ttl-btn.active {
+	background: rgba(249, 115, 22, 0.15);
+	color: var(--brand-accent);
+}
+
+.ttl-active-label {
+	font-size: 10px;
+	font-weight: 700;
+	font-family: var(--font-mono);
+}
+
+.ttl-popover-menu {
+	position: absolute;
+	bottom: 38px;
+	right: 0;
+	background: var(--bg-surface);
+	border: 1px solid var(--border-medium);
+	border-radius: var(--radius-md);
+	padding: 6px;
+	box-shadow: var(--shadow-popover);
+	z-index: 60;
+	width: 250px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.ttl-menu-header {
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--text-muted);
+	padding: 4px 8px;
+	text-transform: uppercase;
+}
+
+.ttl-menu-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 7px 10px;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-sm);
+	color: var(--text-secondary);
+	font-size: 12px;
+	cursor: pointer;
+	text-align: left;
+	width: 100%;
+}
+
+.ttl-menu-item:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.ttl-menu-item.selected {
+	background: var(--brand-primary-subtle);
+	color: var(--brand-primary);
 	font-weight: 600;
 }
 
@@ -1901,10 +2192,11 @@ html, body, #root {
 }
 
 /* ==========================================================================
-   Details Drawer Panel
+   Details Drawer & Collaborative Scratchpad Drawer
    ========================================================================== */
-.details-drawer-panel {
-	width: 320px;
+.details-drawer-panel,
+.scratchpad-drawer-panel {
+	width: 340px;
 	height: 100%;
 	background: var(--bg-sidebar);
 	border-left: 1px solid var(--border-subtle);
@@ -1929,10 +2221,16 @@ html, body, #root {
 	color: var(--text-primary);
 }
 
+.drawer-title-with-icon {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--brand-primary);
+}
+
 .drawer-title-box .drawer-subtitle {
 	font-size: 11px;
 	color: var(--text-muted);
-	font-family: var(--font-mono);
 }
 
 .drawer-close-btn {
@@ -2261,8 +2559,166 @@ html, body, #root {
 	color: var(--text-muted);
 }
 
+/* Scratchpad Editor Canvas */
+.scratchpad-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.scratchpad-tool-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-sm);
+	color: var(--text-secondary);
+	font-size: 12px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.scratchpad-tool-btn:hover {
+	background: var(--bg-surface);
+	color: var(--text-primary);
+}
+
+.scratchpad-sync-tag {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--success);
+	font-weight: 600;
+}
+
+.scratchpad-editor-wrapper {
+	flex: 1;
+	padding: 14px;
+	display: flex;
+}
+
+.scratchpad-textarea {
+	flex: 1;
+	width: 100%;
+	background: transparent;
+	border: none;
+	outline: none;
+	resize: none;
+	color: var(--text-primary);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 1.6;
+}
+
 /* ==========================================================================
-   Modals, Lightbox, Voice Recorder & Search Dialog
+   Decoy Stealth Screen (Panic Mode)
+   ========================================================================== */
+.decoy-screen-overlay {
+	position: fixed;
+	inset: 0;
+	background: #000000;
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	animation: fadeIn 0.1s ease;
+}
+
+.decoy-window {
+	width: 100%;
+	max-width: 900px;
+	height: 540px;
+	background: #0D1117;
+	border: 1px solid #30363D;
+	border-radius: var(--radius-lg);
+	box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.decoy-header {
+	height: 38px;
+	background: #161B22;
+	border-bottom: 1px solid #30363D;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 14px;
+}
+
+.decoy-controls {
+	display: flex;
+	gap: 6px;
+}
+
+.decoy-dot {
+	width: 11px;
+	height: 11px;
+	border-radius: var(--radius-full);
+	cursor: pointer;
+}
+
+.decoy-dot.red { background: #FF5F56; }
+.decoy-dot.yellow { background: #FFBD2E; }
+.decoy-dot.green { background: #27C93F; }
+
+.decoy-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: #8B949E;
+	font-size: 12px;
+	font-family: var(--font-mono);
+}
+
+.decoy-exit-btn {
+	background: transparent;
+	border: none;
+	color: #8B949E;
+	cursor: pointer;
+}
+
+.decoy-terminal-body {
+	flex: 1;
+	padding: 16px;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	color: #C9D1D9;
+	line-height: 1.55;
+	overflow-y: auto;
+}
+
+.t-green { color: #3FB950; font-weight: 600; }
+.t-blue { color: #58A6FF; }
+.t-dim { color: #6E7681; }
+.t-cyan { color: #39C5BB; }
+
+.decoy-cursor {
+	animation: blink 1s step-end infinite;
+	color: #3FB950;
+}
+
+@keyframes blink {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0; }
+}
+
+.decoy-footer {
+	padding: 8px 16px;
+	background: #161B22;
+	border-top: 1px solid #30363D;
+	font-size: 11px;
+	color: #6E7681;
+	text-align: center;
+}
+
+/* ==========================================================================
+   Modals, E2EE, Room Type Picker & Search Dialog
    ========================================================================== */
 .modal-backdrop {
 	position: fixed;
@@ -2285,7 +2741,7 @@ html, body, #root {
 
 .modal-card {
 	width: 100%;
-	max-width: 460px;
+	max-width: 480px;
 	background: var(--bg-surface);
 	border: 1px solid var(--border-medium);
 	border-radius: var(--radius-xl);
@@ -2311,6 +2767,17 @@ html, body, #root {
 	font-size: 16px;
 	font-weight: 700;
 	color: var(--text-primary);
+}
+
+.modal-title-with-icon {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--brand-primary);
+}
+
+.modal-title-with-icon.text-danger {
+	color: var(--danger);
 }
 
 .modal-close-btn {
@@ -2354,6 +2821,67 @@ html, body, #root {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
+}
+
+/* Room Type Picker */
+.room-type-picker-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+}
+
+.type-picker-card {
+	padding: 10px 8px;
+	background: var(--bg-hover);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 4px;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	color: var(--text-secondary);
+}
+
+.type-picker-card:hover {
+	background: var(--bg-surface-elevated);
+	border-color: var(--border-medium);
+	color: var(--text-primary);
+}
+
+.type-picker-card.selected {
+	background: var(--brand-primary-subtle);
+	border-color: var(--brand-primary);
+	color: var(--brand-primary);
+}
+
+.type-picker-title {
+	font-weight: 700;
+	font-size: 12px;
+	color: var(--text-primary);
+}
+
+.type-picker-desc {
+	font-size: 10px;
+	color: var(--text-muted);
+	line-height: 1.3;
+}
+
+.field-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.generate-key-btn {
+	background: transparent;
+	border: none;
+	color: var(--brand-primary);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
 }
 
 .avatar-preview-section {
@@ -2466,33 +2994,16 @@ html, body, #root {
 	padding-left: 0;
 }
 
-.suggestions-box {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
+.e2ee-modal-explainer {
+	font-size: 12.5px;
+	color: var(--text-secondary);
+	line-height: 1.5;
 }
 
-.suggestions-chips {
-	display: flex;
-	gap: 6px;
-	flex-wrap: wrap;
-}
-
-.suggestion-chip {
-	padding: 4px 10px;
-	background: var(--bg-hover);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-full);
-	font-size: 12px;
-	font-family: var(--font-mono);
-	color: var(--brand-primary);
-	cursor: pointer;
-	transition: all 0.15s ease;
-}
-
-.suggestion-chip:hover {
-	background: var(--brand-primary-subtle);
-	border-color: var(--brand-primary);
+.danger-alert-text {
+	font-size: 13px;
+	color: #F87171;
+	line-height: 1.55;
 }
 
 .attachment-options-grid {
@@ -2645,6 +3156,22 @@ html, body, #root {
 
 .btn-solid-primary:hover {
 	background: var(--brand-primary-hover);
+}
+
+.btn-solid-danger {
+	padding: 8px 16px;
+	background: var(--danger);
+	border: none;
+	border-radius: var(--radius-md);
+	color: #FFFFFF;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.btn-solid-danger:hover {
+	background: var(--danger-hover);
 }
 
 /* Lightbox Image Modal */
@@ -2879,7 +3406,8 @@ html, body, #root {
    Responsive Breakpoints & Mobile Adaptability
    ========================================================================== */
 @media (max-width: 1080px) {
-	.details-drawer-panel {
+	.details-drawer-panel,
+	.scratchpad-drawer-panel {
 		position: absolute;
 		right: 0;
 		top: 0;
@@ -2932,10 +3460,11 @@ html, body, #root {
 
 	.channel-title {
 		font-size: 15px;
-		max-width: 120px;
+		max-width: 110px;
 	}
 
-	.channel-copy-label {
+	.channel-copy-label,
+	.e2ee-label {
 		display: none;
 	}
 
@@ -2963,12 +3492,17 @@ html, body, #root {
 		font-size: 12px;
 	}
 
+	.room-type-picker-grid {
+		grid-template-columns: 1fr;
+	}
+
 	.attachment-options-grid {
 		grid-template-columns: 1fr;
 		gap: 8px;
 	}
 
-	.details-drawer-panel {
+	.details-drawer-panel,
+	.scratchpad-drawer-panel {
 		width: 100%;
 	}
 

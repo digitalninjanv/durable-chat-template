@@ -9,6 +9,7 @@ declare namespace Cloudflare {
 	interface Env {
 		Chat: DurableObjectNamespace<import("./index").Chat>;
 		ASSETS: Fetcher;
+		AI?: any;
 	}
 }
 interface Env extends Cloudflare.Env {}

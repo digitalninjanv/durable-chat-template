@@ -29,6 +29,7 @@ interface ChatAreaProps {
 	onError: (msg: string) => void;
 	highlightedMsgId: string | null;
 	pinnedOnlyFilter?: boolean;
+	e2eePassphrase?: string;
 }
 
 const STARTER_PROMPTS = [
@@ -61,6 +62,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 	onError,
 	highlightedMsgId,
 	pinnedOnlyFilter = false,
+	e2eePassphrase,
 }) => {
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -309,6 +311,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 									onImageClick={onImageClick}
 									onJumpToReply={handleJumpToMessage}
 									isHighlighted={localHighlightedId === msg.id}
+									e2eePassphrase={e2eePassphrase}
 								/>
 							</React.Fragment>
 						);

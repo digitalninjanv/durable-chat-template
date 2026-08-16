@@ -81,22 +81,6 @@ export const DoubleCheckIcon: React.FC<IconProps> = ({ size = 16, className = ""
 	</svg>
 );
 
-export const MoreVerticalIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
-	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-		<circle cx="12" cy="12" r="1" />
-		<circle cx="12" cy="5" r="1" />
-		<circle cx="12" cy="19" r="1" />
-	</svg>
-);
-
-export const MoreHorizontalIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
-	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-		<circle cx="12" cy="12" r="1" />
-		<circle cx="19" cy="12" r="1" />
-		<circle cx="5" cy="12" r="1" />
-	</svg>
-);
-
 export const CloseIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
 	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
 		<line x1="18" y1="6" x2="6" y2="18" />
@@ -306,5 +290,65 @@ export const ExternalLinkIcon: React.FC<IconProps> = ({ size = 14, className = "
 		<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
 		<polyline points="15 3 21 3 21 9" />
 		<line x1="10" y1="14" x2="21" y2="3" />
+	</svg>
+);
+
+export const LockIcon: React.FC<IconProps> = ({ size = 16, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+		<path d="M7 11V7a5 5 0 0 1 10 0v4" />
+	</svg>
+);
+
+export const UnlockIcon: React.FC<IconProps> = ({ size = 16, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+		<path d="M7 11V7a5 5 0 0 1 9.9-1" />
+	</svg>
+);
+
+export const FlameIcon: React.FC<IconProps> = ({ size = 16, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+	</svg>
+);
+
+export const BotIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<rect x="3" y="11" width="18" height="10" rx="2" />
+		<circle cx="12" cy="5" r="2" />
+		<path d="M12 7v4" />
+		<line x1="8" y1="16" x2="8.01" y2="16" />
+		<line x1="16" y1="16" x2="16.01" y2="16" />
+	</svg>
+);
+
+export const AlertTriangleIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+		<line x1="12" y1="9" x2="12" y2="13" />
+		<line x1="12" y1="17" x2="12.01" y2="17" />
+	</svg>
+);
+
+export const TerminalIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<polyline points="4 17 10 11 4 5" />
+		<line x1="12" y1="19" x2="20" y2="19" />
+	</svg>
+);
+
+export const FileCodeIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+		<polyline points="14 2 14 8 20 8" />
+		<polyline points="10 13 8 15 10 17" />
+		<polyline points="14 13 16 15 14 17" />
+	</svg>
+);
+
+export const KeyIcon: React.FC<IconProps> = ({ size = 16, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
 	</svg>
 );

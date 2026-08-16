@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import type { ReplyInfo, ChatMessage, Attachment } from "../types";
+import type { ReplyInfo, ChatMessage, Attachment, TTLOption } from "../types";
 import { compressImageFile } from "../utils/helpers";
 import {
 	SendIcon,
@@ -12,12 +12,15 @@ import {
 	CloseIcon,
 	EditIcon,
 	ReplyIcon,
+	FlameIcon,
+	BotIcon,
+	LockIcon,
 } from "./Icons";
 
 interface MessageInputProps {
 	currentUserName: string;
-	onSendMessage: (text: string) => void;
-	onSendAttachment: (attachment: Attachment, caption?: string) => void;
+	onSendMessage: (text: string, ttl?: TTLOption, burnOnRead?: boolean) => void;
+	onSendAttachment: (attachment: Attachment, caption?: string, ttl?: TTLOption) => void;
 	activeReply: ReplyInfo | null;
 	onCancelReply: () => void;
 	editingMessage: ChatMessage | null;
@@ -25,9 +28,20 @@ interface MessageInputProps {
 	onSaveEdit: (newContent: string) => void;
 	onOpenAttachmentModal: () => void;
 	onTyping: () => void;
+	isE2EE?: boolean;
 }
 
-const COMMON_EMOJIS = ["😀", "🔥", "👍", "🚀", "❤️", "🎉", "💡", "✨", "👏", "💯", "👀", "🤖", "⚡", "💻", "☕"];
+const COMMON_EMOJIS = ["😀", "🔥", "👍", "🚀", "❤️", "🎉", "💡", "✨", "👏", "💯", "👀", "🤖", "⚡", "💻", "☕", "🔒", "🛡️"];
+
+const TTL_PRESETS: { label: string; value: TTLOption; isBurn?: boolean }[] = [
+	{ label: "Tanpa batas waktu", value: 0 },
+	{ label: "10 Detik ⏱️", value: 10 },
+	{ label: "1 Menit ⏱️", value: 60 },
+	{ label: "5 Menit ⏱️", value: 300 },
+	{ label: "1 Jam ⏱️", value: 3600 },
+	{ label: "24 Jam ⏱️", value: 86400 },
+	{ label: "Hancur Setelah Dibaca (Dead Drop) 🔥", value: -1, isBurn: true },
+];
 
 export const MessageInput: React.FC<MessageInputProps> = ({
 	currentUserName,
@@ -40,9 +54,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 	onSaveEdit,
 	onOpenAttachmentModal,
 	onTyping,
+	isE2EE,
 }) => {
 	const [text, setText] = useState("");
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+	const [showTTLMenu, setShowTTLMenu] = useState(false);
+	const [selectedTTL, setSelectedTTL] = useState<TTLOption>(0);
+
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	// Sync editing state
@@ -72,7 +90,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 			onSaveEdit(trimmed);
 			setText("");
 		} else {
-			onSendMessage(trimmed);
+			const isBurn = selectedTTL === -1;
+			const ttlValue = selectedTTL === -1 ? 0 : selectedTTL;
+			onSendMessage(trimmed, ttlValue, isBurn);
 			setText("");
 		}
 
@@ -95,6 +115,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 			if (editingMessage) onCancelEdit();
 			if (activeReply) onCancelReply();
 			setShowEmojiPicker(false);
+			setShowTTLMenu(false);
 		}
 
 		// Markdown shortcuts: Ctrl+B (Bold), Ctrl+I (Italic)
@@ -128,6 +149,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 								size,
 							},
 							text.trim() || undefined,
+							selectedTTL === -1 ? 0 : selectedTTL,
 						);
 						setText("");
 					} catch (err) {
@@ -181,7 +203,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 		}, 10);
 	};
 
+	const handleInsertAICommand = (cmd: string) => {
+		setText(cmd);
+		textareaRef.current?.focus();
+	};
+
 	const hasContent = text.trim().length > 0;
+	const isTTLActive = selectedTTL !== 0;
 
 	return (
 		<div className="chat-input-container">
@@ -286,9 +314,65 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 						>
 							<QuoteIcon size={14} />
 						</button>
+
+						<div className="format-separator" />
+
+						{/* Quick AI Commands */}
+						<button
+							type="button"
+							className="format-btn ai-quick-btn"
+							onClick={() => handleInsertAICommand("/ai ")}
+							title="Panggil Cloudflare Workers AI (/ai)"
+						>
+							<BotIcon size={15} />
+							<span className="ai-btn-text">AI</span>
+						</button>
 					</div>
 
 					<div className="format-tools-right">
+						{/* Ephemeral Self-Destruct Timer */}
+						<div className="ttl-picker-container">
+							<button
+								type="button"
+								className={`format-btn ttl-btn ${isTTLActive ? "active" : ""}`}
+								onClick={() => setShowTTLMenu(!showTTLMenu)}
+								title={
+									selectedTTL === -1
+										? "Mode Dead Drop (Hancur setelah dibaca)"
+										: selectedTTL > 0
+										? `Pesan lenyap dalam ${selectedTTL}s`
+										: "Atur Timer Pesan Meledak (Self-Destruct)"
+								}
+							>
+								<FlameIcon size={15} />
+								{isTTLActive && (
+									<span className="ttl-active-label">
+										{selectedTTL === -1 ? "Dead-drop" : `${selectedTTL < 60 ? `${selectedTTL}s` : selectedTTL < 3600 ? `${selectedTTL / 60}m` : `${selectedTTL / 3600}h`}`}
+									</span>
+								)}
+							</button>
+
+							{showTTLMenu && (
+								<div className="ttl-popover-menu">
+									<div className="ttl-menu-header">Timer Pesan Lenyap (TTL)</div>
+									{TTL_PRESETS.map((p) => (
+										<button
+											key={p.value}
+											type="button"
+											className={`ttl-menu-item ${selectedTTL === p.value ? "selected" : ""}`}
+											onClick={() => {
+												setSelectedTTL(p.value);
+												setShowTTLMenu(false);
+											}}
+										>
+											<span>{p.label}</span>
+											{selectedTTL === p.value && <span>✓</span>}
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+
 						{/* Emoji Picker Trigger */}
 						<div className="emoji-picker-container">
 							<button
@@ -342,7 +426,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 						placeholder={
 							editingMessage
 								? "Perbarui teks pesan..."
-								: `Ketik pesan sebagai ${currentUserName}... (Shift+Enter baris baru, paste gambar didukung)`
+								: isE2EE
+								? `🔒 [E2EE Aktif] Ketik pesan terenkripsi sebagai ${currentUserName}...`
+								: `Ketik pesan sebagai ${currentUserName}... (Ketik /ai atau /summarize untuk AI, paste gambar didukung)`
 						}
 						value={text}
 						onChange={handleChange}

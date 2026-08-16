@@ -21,6 +21,8 @@ import type {
 	RoomInfo,
 	ToastItem,
 	EdgeConnectionStats,
+	RoomCategory,
+	TTLOption,
 } from "./types";
 
 import {
@@ -28,15 +30,18 @@ import {
 	getAvatarColor,
 	getStoredRooms,
 	saveRoomVisit,
-	DEFAULT_CHANNELS,
 	sounds,
 } from "./utils/helpers";
+
+import { encryptText, decryptText } from "./utils/crypto";
 
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { MessageInput } from "./components/MessageInput";
 import { DetailsDrawer } from "./components/DetailsDrawer";
+import { ScratchpadDrawer } from "./components/ScratchpadDrawer";
+import { DecoyScreen } from "./components/DecoyScreen";
 import { ToastContainer } from "./components/Toast";
 import {
 	ProfileModal,
@@ -45,11 +50,37 @@ import {
 	ImageViewerModal,
 	ShortcutsModal,
 	SearchModal,
+	E2EEKeyModal,
+	NukeConfirmModal,
 } from "./components/Modals";
 
 function DurableChatApp() {
 	const navigate = useNavigate();
 	const { room = "general" } = useParams();
+
+	// -------------------------------------------------------------
+	// E2EE Key & URL Hash Management
+	// -------------------------------------------------------------
+	const [e2eeKey, setE2eeKey] = useState<string>(() => {
+		// Try from URL hash: #key=xyz
+		const hash = window.location.hash;
+		if (hash.includes("key=")) {
+			const match = hash.match(/key=([^&]+)/);
+			if (match) return decodeURIComponent(match[1]);
+		}
+		// Fallback to localStorage
+		return localStorage.getItem(`cf_e2ee_key_${room}`) || "";
+	});
+
+	useEffect(() => {
+		if (e2eeKey) {
+			localStorage.setItem(`cf_e2ee_key_${room}`, e2eeKey);
+		} else {
+			localStorage.removeItem(`cf_e2ee_key_${room}`);
+		}
+	}, [e2eeKey, room]);
+
+	const isE2EE = Boolean(e2eeKey && e2eeKey.trim().length > 0);
 
 	// -------------------------------------------------------------
 	// Theme State & Lifecycle
@@ -89,7 +120,7 @@ function DurableChatApp() {
 	const handleSaveProfile = useCallback((updated: UserProfile) => {
 		setProfile(updated);
 		localStorage.setItem("cf_user_profile", JSON.stringify(updated));
-		addToast(`Profil berhasil diperbarui: ${updated.name}`, "success");
+		addToast(`Profil diperbarui: @${updated.name}`, "success");
 	}, []);
 
 	// -------------------------------------------------------------
@@ -98,15 +129,19 @@ function DurableChatApp() {
 	const [recentRooms, setRecentRooms] = useState<RoomInfo[]>(() => getStoredRooms());
 
 	useEffect(() => {
+		const isPrivate = isE2EE;
+		const isDirect = room.startsWith("dm-");
 		const currentRoomInfo: RoomInfo = {
 			id: room,
-			name: room,
-			topic: `Ruang diskusi #${room}`,
+			name: isDirect ? `@${room.substring(3)}` : room,
+			topic: isDirect ? `Obrolan Langsung` : `Ruang diskusi #${room}`,
+			type: isDirect ? "direct" : isPrivate ? "private" : "public",
+			e2eeEnabled: isPrivate,
 			lastMessageTime: Date.now(),
 		};
 		saveRoomVisit(currentRoomInfo);
 		setRecentRooms(getStoredRooms());
-	}, [room]);
+	}, [room, isE2EE]);
 
 	const handleSelectRoom = useCallback(
 		(roomId: string) => {
@@ -116,17 +151,29 @@ function DurableChatApp() {
 	);
 
 	const handleCreateRoom = useCallback(
-		(roomId: string, name?: string, topic?: string) => {
+		(roomId: string, name?: string, topic?: string, category: RoomCategory = "public", key?: string) => {
+			if (key) {
+				setE2eeKey(key);
+			}
 			const newRoom: RoomInfo = {
 				id: roomId,
 				name: name || roomId,
-				topic: topic || `Saluran #${roomId}`,
+				topic: topic || (category === "direct" ? "Obrolan Langsung" : `Saluran #${roomId}`),
+				type: category,
+				e2eeEnabled: Boolean(key),
 				lastMessageTime: Date.now(),
 			};
 			saveRoomVisit(newRoom);
 			setRecentRooms(getStoredRooms());
-			navigate(`/${roomId}`);
-			addToast(`Berhasil masuk ke saluran #${roomId}`, "info");
+			navigate(`/${roomId}${key ? `#key=${encodeURIComponent(key)}` : ""}`);
+			addToast(
+				category === "private"
+					? `Ruang privat #${roomId} (E2EE) siap dipakai 🔒`
+					: category === "direct"
+					? `Membuka obrolan langsung @${name || roomId} 💬`
+					: `Berhasil masuk ke saluran #${roomId} 🌍`,
+				"success",
+			);
 		},
 		[navigate],
 	);
@@ -137,7 +184,7 @@ function DurableChatApp() {
 	const [toasts, setToasts] = useState<ToastItem[]>([]);
 
 	const addToast = useCallback(
-		(message: string, type: "info" | "success" | "warning" | "error" = "info", duration = 3000) => {
+		(message: string, type: "info" | "success" | "warning" | "error" = "info", duration = 3200) => {
 			const id = nanoid(6);
 			setToasts((prev) => [...prev, { id, message, type, duration }]);
 			setTimeout(() => {
@@ -152,9 +199,10 @@ function DurableChatApp() {
 	}, []);
 
 	// -------------------------------------------------------------
-	// Messages & WebSocket Sync
+	// Messages, Scratchpad & WebSocket Sync
 	// -------------------------------------------------------------
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
+	const [scratchpadContent, setScratchpadContent] = useState<string>("");
 	const [activeReply, setActiveReply] = useState<ReplyInfo | null>(null);
 	const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
 	const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -172,6 +220,18 @@ function DurableChatApp() {
 		durableObjectId: room,
 	});
 
+	// Decrypt incoming message helper
+	const processIncomingMessage = useCallback(
+		async (msg: ChatMessage): Promise<ChatMessage> => {
+			if (msg.isEncrypted && msg.content) {
+				const decrypted = await decryptText(msg.content, e2eeKey);
+				return { ...msg, content: decrypted };
+			}
+			return msg;
+		},
+		[e2eeKey],
+	);
+
 	const socket = usePartySocket({
 		party: "chat",
 		room,
@@ -188,26 +248,30 @@ function DurableChatApp() {
 		onError: () => {
 			setConnectionStats((prev) => ({ ...prev, status: "reconnecting" }));
 		},
-		onMessage: (evt) => {
+		onMessage: async (evt) => {
 			try {
 				const message = JSON.parse(evt.data as string) as Message;
 				if (message.type === "add") {
+					const processed = await processIncomingMessage(message);
 					setMessages((prev) => {
 						const exists = prev.some((m) => m.id === message.id);
 						if (exists) {
-							return prev.map((m) => (m.id === message.id ? message : m));
+							return prev.map((m) => (m.id === message.id ? processed : m));
 						}
-						if (message.user !== profile.name) {
+						if (message.user !== profile.name && message.role !== "system") {
 							sounds.playReceive();
 						}
-						return [...prev, message];
+						return [...prev, processed];
 					});
 				} else if (message.type === "update") {
+					const processed = await processIncomingMessage(message);
 					setMessages((prev) =>
-						prev.map((m) => (m.id === message.id ? message : m)),
+						prev.map((m) => (m.id === message.id ? processed : m)),
 					);
 				} else if (message.type === "delete") {
 					setMessages((prev) => prev.filter((m) => m.id !== message.id));
+				} else if (message.type === "scratchpad") {
+					setScratchpadContent(message.content);
 				} else if (message.type === "typing") {
 					if (message.user !== profile.name) {
 						setTypingUsers((prev) => {
@@ -218,7 +282,13 @@ function DurableChatApp() {
 						});
 					}
 				} else if (message.type === "all") {
-					setMessages(message.messages);
+					if (message.scratchpad !== undefined) {
+						setScratchpadContent(message.scratchpad);
+					}
+					const decryptedAll = await Promise.all(
+						message.messages.map((m) => processIncomingMessage(m)),
+					);
+					setMessages(decryptedAll);
 				}
 			} catch (e) {
 				console.error("Error parsing WebSocket message:", e);
@@ -250,80 +320,127 @@ function DurableChatApp() {
 		}
 	}, [socket, profile.name]);
 
-	// Send message
+	// Send message (Plain or E2EE Encrypted)
 	const handleSendMessage = useCallback(
-		(text: string) => {
-			const newMessage: ChatMessage = {
+		async (text: string, ttl: TTLOption = 0, burnOnRead = false) => {
+			const expiresAt = ttl > 0 ? Date.now() + ttl * 1000 : undefined;
+			const shouldEncrypt = isE2EE;
+
+			const cipherOrPlain = shouldEncrypt
+				? await encryptText(text, e2eeKey)
+				: text;
+
+			const outgoingPayload: ChatMessage = {
 				id: nanoid(8),
-				content: text,
+				content: cipherOrPlain,
 				user: profile.name,
 				role: "user",
 				timestamp: Date.now(),
 				replyTo: activeReply,
+				isEncrypted: shouldEncrypt,
+				expiresAt,
+				burnOnRead,
 			};
 
-			setMessages((prev) => [...prev, newMessage]);
+			// Optimistic UI display with plaintext
+			const localDisplay: ChatMessage = {
+				...outgoingPayload,
+				content: text,
+			};
+
+			setMessages((prev) => [...prev, localDisplay]);
 			sounds.playSend();
 
 			if (socket) {
 				socket.send(
 					JSON.stringify({
 						type: "add",
-						...newMessage,
+						...outgoingPayload,
 					} satisfies Message),
 				);
 			}
 
 			setActiveReply(null);
 		},
-		[socket, profile.name, activeReply],
+		[socket, profile.name, activeReply, isE2EE, e2eeKey],
 	);
 
 	// Send real attachment (photo, document, or audio)
 	const handleSendRealAttachment = useCallback(
-		(attachment: Attachment, caption?: string) => {
-			const content = caption || (attachment.type === "image" ? "Membagikan gambar 🖼️" : attachment.type === "file" ? `Membagikan berkas: ${attachment.name}` : "Pesan Suara 🎙️");
+		async (attachment: Attachment, caption?: string, ttl: TTLOption = 0) => {
+			const content =
+				caption ||
+				(attachment.type === "image"
+					? "Membagikan gambar 🖼️"
+					: attachment.type === "file"
+					? `Membagikan berkas: ${attachment.name}`
+					: "Pesan Suara 🎙️");
 
-			const newMessage: ChatMessage = {
+			const expiresAt = ttl > 0 ? Date.now() + ttl * 1000 : undefined;
+			const shouldEncrypt = isE2EE;
+
+			const cipherOrPlain = shouldEncrypt
+				? await encryptText(content, e2eeKey)
+				: content;
+
+			const outgoingPayload: ChatMessage = {
 				id: nanoid(8),
-				content,
+				content: cipherOrPlain,
 				user: profile.name,
 				role: "user",
 				timestamp: Date.now(),
 				attachment,
 				replyTo: activeReply,
+				isEncrypted: shouldEncrypt,
+				expiresAt,
 			};
 
-			setMessages((prev) => [...prev, newMessage]);
+			const localDisplay: ChatMessage = {
+				...outgoingPayload,
+				content,
+			};
+
+			setMessages((prev) => [...prev, localDisplay]);
 			sounds.playSend();
 
 			if (socket) {
 				socket.send(
 					JSON.stringify({
 						type: "add",
-						...newMessage,
+						...outgoingPayload,
 					} satisfies Message),
 				);
 			}
 
 			setActiveReply(null);
 			setIsAttachmentOpen(false);
-			addToast("Lampiran berhasil dikirim ke saluran!", "success");
+			addToast("Lampiran berhasil dikirim!", "success");
 		},
-		[socket, profile.name, activeReply, addToast],
+		[socket, profile.name, activeReply, isE2EE, e2eeKey, addToast],
 	);
 
 	// Save edited message
 	const handleSaveEdit = useCallback(
-		(newContent: string) => {
+		async (newContent: string) => {
 			if (!editingMessage) return;
+
+			const shouldEncrypt = isE2EE;
+			const cipherOrPlain = shouldEncrypt
+				? await encryptText(newContent, e2eeKey)
+				: newContent;
+
 			const updated: ChatMessage = {
 				...editingMessage,
-				content: newContent,
+				content: cipherOrPlain,
 				edited: true,
+				isEncrypted: shouldEncrypt,
 			};
 
-			setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+			setMessages((prev) =>
+				prev.map((m) =>
+					m.id === updated.id ? { ...updated, content: newContent } : m,
+				),
+			);
 
 			if (socket) {
 				socket.send(
@@ -337,7 +454,7 @@ function DurableChatApp() {
 			setEditingMessage(null);
 			addToast("Pesan berhasil diperbarui", "info");
 		},
-		[socket, editingMessage, addToast],
+		[socket, editingMessage, isE2EE, e2eeKey, addToast],
 	);
 
 	// Delete message
@@ -352,9 +469,39 @@ function DurableChatApp() {
 					} satisfies Message),
 				);
 			}
-			addToast("Pesan telah dihapus", "info");
 		},
-		[socket, addToast],
+		[socket],
+	);
+
+	// Room Nuke Execution
+	const handleConfirmNuke = useCallback(() => {
+		if (socket) {
+			socket.send(
+				JSON.stringify({
+					type: "nuke",
+					user: profile.name,
+				} satisfies Message),
+			);
+			addToast("Ruangan telah dimusnahkan 🔥", "warning");
+		}
+	}, [socket, profile.name, addToast]);
+
+	// Update Collaborative Scratchpad
+	const handleUpdateScratchpad = useCallback(
+		(newText: string) => {
+			setScratchpadContent(newText);
+			if (socket) {
+				socket.send(
+					JSON.stringify({
+						type: "scratchpad",
+						content: newText,
+						updatedBy: profile.name,
+						updatedAt: Date.now(),
+					} satisfies Message),
+				);
+			}
+		},
+		[socket, profile.name],
 	);
 
 	// Toggle pin
@@ -377,7 +524,7 @@ function DurableChatApp() {
 			}
 
 			addToast(
-				updated.pinned ? "Pesan disematkan di ruangan ini 📌" : "Pesan dilepas dari sematan",
+				updated.pinned ? "Pesan disematkan 📌" : "Pesan dilepas dari sematan",
 				"info",
 			);
 		},
@@ -438,25 +585,33 @@ function DurableChatApp() {
 		[socket, profile.name],
 	);
 
-	// Copy room link
+	// Copy room link with E2EE key if active
 	const handleCopyRoomLink = useCallback(() => {
-		navigator.clipboard.writeText(window.location.href);
+		const url = e2eeKey ? `${window.location.origin}/${room}#key=${encodeURIComponent(e2eeKey)}` : window.location.href;
+		navigator.clipboard.writeText(url);
 		setLinkCopied(true);
-		addToast("Tautan saluran berhasil disalin ke papan klip! 🔗", "success");
+		addToast(isE2EE ? "Tautan dengan Kunci E2EE disalin! 🔒" : "Tautan saluran disalin! 🔗", "success");
 		setTimeout(() => setLinkCopied(false), 2000);
-	}, [addToast]);
+	}, [e2eeKey, room, isE2EE, addToast]);
 
 	// -------------------------------------------------------------
 	// UI Modals & Panels State
 	// -------------------------------------------------------------
 	const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 	const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+	const [isScratchpadOpen, setIsScratchpadOpen] = useState(false);
+	const [isDecoyActive, setIsDecoyActive] = useState(false);
 	const [isProfileOpen, setIsProfileOpen] = useState(false);
 	const [isNewRoomOpen, setIsNewRoomOpen] = useState(false);
+	const [newRoomInitialCategory, setNewRoomInitialCategory] = useState<RoomCategory>("public");
 	const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
 	const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
+	const [isE2EEModalOpen, setIsE2EEModalOpen] = useState(false);
+	const [isNukeModalOpen, setIsNukeModalOpen] = useState(false);
 	const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+
+	const lastEscPressTimeRef = useRef<number>(0);
 
 	// Global Keyboard Shortcuts
 	useEffect(() => {
@@ -478,13 +633,29 @@ function DurableChatApp() {
 				return;
 			}
 
-			// Escape -> Close all modals/panels
+			// Esc handling: Double Esc triggers Decoy Mode
 			if (e.key === "Escape") {
+				if (isDecoyActive) {
+					setIsDecoyActive(false);
+					return;
+				}
+
+				const now = Date.now();
+				if (now - lastEscPressTimeRef.current < 450) {
+					setIsDecoyActive(true);
+					lastEscPressTimeRef.current = 0;
+					return;
+				}
+				lastEscPressTimeRef.current = now;
+
+				// Close other open dialogs
 				setIsProfileOpen(false);
 				setIsNewRoomOpen(false);
 				setIsAttachmentOpen(false);
 				setIsShortcutsOpen(false);
 				setIsSearchOpen(false);
+				setIsE2EEModalOpen(false);
+				setIsNukeModalOpen(false);
 				setSelectedImageUrl(null);
 				setActiveReply(null);
 				setEditingMessage(null);
@@ -493,7 +664,7 @@ function DurableChatApp() {
 
 		window.addEventListener("keydown", handleGlobalKeyDown);
 		return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-	}, []);
+	}, [isDecoyActive]);
 
 	// Pinned message count
 	const pinnedCount = useMemo(() => messages.filter((m) => m.pinned).length, [messages]);
@@ -508,6 +679,9 @@ function DurableChatApp() {
 
 	return (
 		<div className="app-layout-root">
+			{/* Decoy Stealth Screen */}
+			<DecoyScreen isActive={isDecoyActive} onExit={() => setIsDecoyActive(false)} />
+
 			{/* Toast system */}
 			<ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -519,8 +693,13 @@ function DurableChatApp() {
 				onSelectRoom={handleSelectRoom}
 				userProfile={profile}
 				onOpenProfileModal={() => setIsProfileOpen(true)}
-				onOpenNewRoomModal={() => setIsNewRoomOpen(true)}
+				onOpenNewRoomModal={(cat) => {
+					setNewRoomInitialCategory(cat || "public");
+					setIsNewRoomOpen(true);
+				}}
 				onOpenShortcuts={() => setIsShortcutsOpen(true)}
+				onTriggerDecoy={() => setIsDecoyActive(true)}
+				onTriggerNuke={() => setIsNukeModalOpen(true)}
 				rooms={recentRooms}
 			/>
 
@@ -529,10 +708,23 @@ function DurableChatApp() {
 				<Header
 					room={room}
 					onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-					onToggleDetails={() => setIsDetailsOpen(!isDetailsOpen)}
+					onToggleDetails={() => {
+						setIsDetailsOpen(!isDetailsOpen);
+						setIsScratchpadOpen(false);
+					}}
 					detailsOpen={isDetailsOpen}
+					onToggleScratchpad={() => {
+						setIsScratchpadOpen(!isScratchpadOpen);
+						setIsDetailsOpen(false);
+					}}
+					scratchpadOpen={isScratchpadOpen}
 					onOpenSearch={() => setIsSearchOpen(true)}
 					onOpenShortcuts={() => setIsShortcutsOpen(true)}
+					onTriggerDecoy={() => setIsDecoyActive(true)}
+					onTriggerNuke={() => setIsNukeModalOpen(true)}
+					onOpenAIHelp={() => {
+						handleSendMessage("/ai Ringkas topik utama dalam sistem Cloudflare Durable Objects ini");
+					}}
 					theme={theme}
 					onToggleTheme={toggleTheme}
 					pinnedCount={pinnedCount}
@@ -542,6 +734,8 @@ function DurableChatApp() {
 					connectionStats={connectionStats}
 					onCopyLink={handleCopyRoomLink}
 					linkCopied={linkCopied}
+					isE2EE={isE2EE}
+					onToggleE2EE={() => setIsE2EEModalOpen(true)}
 				/>
 
 				<ChatArea
@@ -560,11 +754,12 @@ function DurableChatApp() {
 					onTogglePin={handleTogglePin}
 					onAddReaction={handleAddReaction}
 					onImageClick={(url) => setSelectedImageUrl(url)}
-					onSendPrompt={handleSendMessage}
+					onSendPrompt={(p) => handleSendMessage(p)}
 					onSendAttachment={handleSendRealAttachment}
 					onError={(msg) => addToast(msg, "error")}
 					highlightedMsgId={highlightedMsgId}
 					pinnedOnlyFilter={isShowingPinnedOnly}
+					e2eePassphrase={e2eeKey}
 				/>
 
 				<MessageInput
@@ -578,6 +773,7 @@ function DurableChatApp() {
 					onSaveEdit={handleSaveEdit}
 					onOpenAttachmentModal={() => setIsAttachmentOpen(true)}
 					onTyping={handleUserTyping}
+					isE2EE={isE2EE}
 				/>
 			</main>
 
@@ -598,6 +794,15 @@ function DurableChatApp() {
 				linkCopied={linkCopied}
 			/>
 
+			{/* Right Collaborative Scratchpad Drawer */}
+			<ScratchpadDrawer
+				isOpen={isScratchpadOpen}
+				onClose={() => setIsScratchpadOpen(false)}
+				content={scratchpadContent}
+				onUpdate={handleUpdateScratchpad}
+				room={room}
+			/>
+
 			{/* Dialog Modals */}
 			<ProfileModal
 				isOpen={isProfileOpen}
@@ -610,6 +815,25 @@ function DurableChatApp() {
 				isOpen={isNewRoomOpen}
 				onClose={() => setIsNewRoomOpen(false)}
 				onCreateRoom={handleCreateRoom}
+				initialCategory={newRoomInitialCategory}
+			/>
+
+			<E2EEKeyModal
+				isOpen={isE2EEModalOpen}
+				onClose={() => setIsE2EEModalOpen(false)}
+				currentKey={e2eeKey}
+				onSaveKey={(k) => {
+					setE2eeKey(k);
+					addToast(k ? "Kunci E2EE diterapkan 🔒" : "E2EE dinonaktifkan", "info");
+				}}
+				room={room}
+			/>
+
+			<NukeConfirmModal
+				isOpen={isNukeModalOpen}
+				onClose={() => setIsNukeModalOpen(false)}
+				onConfirmNuke={handleConfirmNuke}
+				room={room}
 			/>
 
 			<AttachmentModal

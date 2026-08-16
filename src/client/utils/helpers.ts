@@ -14,6 +14,12 @@ export const AVATAR_PALETTES = [
 	{ bg: "#64748B", text: "#FFFFFF", name: "Slate" },
 ];
 
+export const AVATAR_COLORS = [
+	"#3B82F6", "#10B981", "#6366F1", "#EC4899",
+	"#F59E0B", "#8B5CF6", "#06B6D4", "#14B8A6",
+	"#F97316", "#64748B"
+];
+
 export function hashString(str: string): number {
 	let hash = 0;
 	for (let i = 0; i < str.length; i++) {
