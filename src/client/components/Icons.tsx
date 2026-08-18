@@ -81,6 +81,22 @@ export const DoubleCheckIcon: React.FC<IconProps> = ({ size = 16, className = ""
 	</svg>
 );
 
+export const MoreHorizontalIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<circle cx="12" cy="12" r="1" />
+		<circle cx="19" cy="12" r="1" />
+		<circle cx="5" cy="12" r="1" />
+	</svg>
+);
+
+export const MoreVerticalIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+		<circle cx="12" cy="12" r="1" />
+		<circle cx="12" cy="5" r="1" />
+		<circle cx="12" cy="19" r="1" />
+	</svg>
+);
+
 export const CloseIcon: React.FC<IconProps> = ({ size = 18, className = "", ...props }) => (
 	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
 		<line x1="18" y1="6" x2="6" y2="18" />
