@@ -21,6 +21,8 @@ import {
 	KeyIcon,
 	UsersIcon,
 	HashIcon,
+	DownloadIcon,
+	ExternalLinkIcon,
 } from "./Icons";
 
 // ============================================================================
@@ -709,10 +711,47 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 	return (
 		<div className="lightbox-backdrop" onClick={onClose}>
 			<div className="lightbox-container" onClick={(e) => e.stopPropagation()}>
-				<button type="button" className="lightbox-close-btn" onClick={onClose}>
-					<CloseIcon size={20} />
-				</button>
-				<img src={imageUrl} alt="Tampilan Penuh" className="lightbox-img" />
+				{/* Top Header Bar with Actions */}
+				<div className="lightbox-header-bar">
+					<div className="lightbox-title-info">
+						<ImageIcon size={16} />
+						<span>Pratinjau Gambar</span>
+					</div>
+					<div className="lightbox-actions-right">
+						<a
+							href={imageUrl}
+							download="gambar-chat.jpg"
+							className="lightbox-action-btn primary"
+							title="Unduh Gambar Asli"
+						>
+							<DownloadIcon size={14} />
+							<span>Unduh</span>
+						</a>
+						<a
+							href={imageUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="lightbox-action-btn"
+							title="Buka di Tab Baru"
+						>
+							<ExternalLinkIcon size={14} />
+							<span>Tab Baru</span>
+						</a>
+						<button
+							type="button"
+							className="lightbox-action-btn close"
+							onClick={onClose}
+							title="Tutup (Esc)"
+							aria-label="Tutup"
+						>
+							<CloseIcon size={16} />
+						</button>
+					</div>
+				</div>
+
+				<div className="lightbox-image-viewport">
+					<img src={imageUrl} alt="Tampilan Penuh" className="lightbox-img" />
+				</div>
 			</div>
 		</div>
 	);

@@ -38,6 +38,16 @@ interface MessageItemProps {
 	e2eePassphrase?: string;
 }
 
+const getFileExtension = (name?: string) => {
+	if (!name) return "FILE";
+	const parts = name.split(".");
+	if (parts.length > 1) {
+		const ext = parts[parts.length - 1].toUpperCase();
+		return ext.length <= 5 ? ext : ext.substring(0, 4);
+	}
+	return "FILE";
+};
+
 const QUICK_EMOJIS = ["👍", "❤️", "🔥", "🎉", "🚀", "💡"];
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -242,19 +252,42 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 									<div className="message-attachment-box">
 										{/* Image Attachment */}
 										{message.attachment.type === "image" && (
-											<div
-												className="attachment-image-card"
-												onClick={() => onImageClick(message.attachment!.url)}
-											>
-												<img
-													src={message.attachment.url}
-													alt={message.attachment.name || "Gambar"}
-													className="attachment-img"
-													loading="lazy"
-												/>
-												<div className="image-zoom-overlay">
-													<ImageIcon size={18} />
-													<span>Klik untuk Perbesar</span>
+											<div className="attachment-image-card">
+												<div
+													className="attachment-image-wrapper"
+													onClick={() => onImageClick(message.attachment!.url)}
+													title="Klik untuk melihat pratinjau penuh"
+												>
+													<img
+														src={message.attachment.url}
+														alt={message.attachment.name || "Gambar"}
+														className="attachment-img"
+														loading="lazy"
+													/>
+													<div className="image-zoom-overlay">
+														<ImageIcon size={16} />
+														<span>Klik untuk Perbesar</span>
+													</div>
+												</div>
+												<div className="attachment-card-footer">
+													<div className="attachment-meta-info">
+														<span className="attachment-name-tag" title={message.attachment.name || "gambar.jpg"}>
+															{message.attachment.name || "gambar.jpg"}
+														</span>
+														{message.attachment.size && (
+															<span className="attachment-size-tag">{message.attachment.size}</span>
+														)}
+													</div>
+													<a
+														href={message.attachment.url}
+														download={message.attachment.name || "gambar.jpg"}
+														className="attachment-download-btn"
+														title="Unduh Gambar Asli"
+														onClick={(e) => e.stopPropagation()}
+													>
+														<DownloadIcon size={14} />
+														<span>Unduh</span>
+													</a>
 												</div>
 											</div>
 										)}
@@ -262,12 +295,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 										{/* Document / File Attachment */}
 										{message.attachment.type === "file" && (
 											<div className="attachment-file-card">
-												<div className="file-icon-box">
-													<FileTextIcon size={20} />
+												<div className="file-badge-box">
+													<span className="file-ext-label">
+														{getFileExtension(message.attachment.name)}
+													</span>
 												</div>
 												<div className="file-info-box">
-													<div className="file-name">{message.attachment.name}</div>
-													<div className="file-meta">{message.attachment.size || "Berkas"}</div>
+													<div className="file-name" title={message.attachment.name}>
+														{message.attachment.name}
+													</div>
+													<div className="file-meta">
+														<span>{message.attachment.size || "Berkas"}</span>
+														<span className="meta-bullet">•</span>
+														<span className="file-type-pill">
+															{getFileExtension(message.attachment.name)}
+														</span>
+													</div>
 												</div>
 												<a
 													href={message.attachment.url}
@@ -276,7 +319,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 													title="Unduh Berkas Ini"
 													onClick={(e) => e.stopPropagation()}
 												>
-													<DownloadIcon size={16} />
+													<DownloadIcon size={15} />
+													<span className="download-btn-text">Unduh</span>
 												</a>
 											</div>
 										)}
@@ -308,11 +352,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 													<div className={`waveform-bar bar-6 ${isPlayingAudio ? "animating" : ""}`} />
 													<div className={`waveform-bar bar-7 ${isPlayingAudio ? "animating" : ""}`} />
 												</div>
-												<span className="audio-duration">
-													{isPlayingAudio && audioCurrentTime > 0
-														? `0:${Math.floor(audioCurrentTime) < 10 ? "0" : ""}${Math.floor(audioCurrentTime)}`
-														: message.attachment.duration || "0:15"}
-												</span>
+												<div className="audio-meta-right">
+													<span className="audio-duration">
+														{isPlayingAudio && audioCurrentTime > 0
+															? `0:${Math.floor(audioCurrentTime) < 10 ? "0" : ""}${Math.floor(audioCurrentTime)}`
+															: message.attachment.duration || "0:15"}
+													</span>
+													<a
+														href={message.attachment.url}
+														download="voice-note.webm"
+														className="audio-download-icon-btn"
+														title="Unduh Voice Note"
+														onClick={(e) => e.stopPropagation()}
+													>
+														<DownloadIcon size={13} />
+													</a>
+												</div>
 											</div>
 										)}
 									</div>
