@@ -1953,54 +1953,92 @@ html, body, #root {
 /* Empty State Onboarding */
 .chat-empty-state-card {
 	margin: auto;
-	max-width: 540px;
+	max-width: 520px;
+	width: 100%;
 	text-align: center;
-	padding: 32px 24px;
+	padding: 28px 22px;
 	background: var(--bg-surface);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-xl);
 	box-shadow: var(--shadow-md);
+	animation: fadeIn 0.25s ease;
 }
 
 .empty-state-icon-box {
-	width: 64px;
-	height: 64px;
+	width: 56px;
+	height: 56px;
 	background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
 	color: #FFFFFF;
-	border-radius: var(--radius-xl);
-	margin: 0 auto 16px auto;
+	border-radius: var(--radius-lg);
+	margin: 0 auto 14px auto;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 8px 24px rgba(249, 115, 22, 0.3);
+	box-shadow: 0 6px 20px rgba(249, 115, 22, 0.25);
 }
 
 .empty-state-title {
-	font-size: 20px;
+	font-size: 19px;
 	font-weight: 700;
 	color: var(--text-primary);
 	margin-bottom: 8px;
+	line-height: 1.3;
+	word-break: break-word;
+}
+
+.empty-state-room-badge {
+	display: inline-block;
+	color: var(--brand-primary);
+	background: var(--brand-primary-subtle);
+	padding: 1px 8px;
+	border-radius: var(--radius-md);
+	font-weight: 700;
+	word-break: break-all;
 }
 
 .empty-state-desc {
-	font-size: 13.5px;
+	font-size: 13px;
 	color: var(--text-secondary);
-	line-height: 1.6;
-	margin-bottom: 24px;
+	line-height: 1.55;
+	margin-bottom: 16px;
+	max-width: 440px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.empty-state-badges-row {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 20px;
+}
+
+.empty-badge {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	background: var(--bg-hover);
+	border: 1px solid var(--border-subtle);
+	padding: 3px 9px;
+	border-radius: var(--radius-full);
 }
 
 .starter-prompts-container {
 	text-align: left;
+	border-top: 1px solid var(--border-subtle);
+	padding-top: 16px;
 }
 
 .starter-prompts-label {
-	font-size: 11px;
+	font-size: 10.5px;
 	font-weight: 700;
 	color: var(--text-muted);
 	letter-spacing: 0.5px;
 	text-transform: uppercase;
 	display: block;
-	margin-bottom: 10px;
+	margin-bottom: 8px;
 }
 
 .starter-prompts-grid {
@@ -2010,7 +2048,7 @@ html, body, #root {
 }
 
 .starter-prompt-card {
-	padding: 10px 14px;
+	padding: 10px 12px;
 	background: var(--bg-hover);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-md);
@@ -2026,19 +2064,38 @@ html, body, #root {
 	transform: translateY(-1px);
 }
 
+.prompt-card-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 3px;
+}
+
 .prompt-card-title {
 	font-weight: 600;
 	font-size: 12.5px;
 	color: var(--text-primary);
-	margin-bottom: 2px;
+}
+
+.prompt-card-arrow {
+	font-size: 12px;
+	color: var(--text-muted);
+	transition: transform 0.15s ease;
+}
+
+.starter-prompt-card:hover .prompt-card-arrow {
+	color: var(--brand-primary);
+	transform: translateX(2px);
 }
 
 .prompt-card-text {
-	font-size: 12px;
+	font-size: 11.5px;
 	color: var(--text-secondary);
-	white-space: nowrap;
+	line-height: 1.4;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
 	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .scroll-bottom-floating-btn {
@@ -3789,5 +3846,70 @@ html, body, #root {
 	.toast-card {
 		min-width: 0;
 		max-width: 100%;
+	}
+
+	/* Mobile Empty State Card Refinement */
+	.chat-empty-state-card {
+		padding: 20px 14px;
+		border-radius: var(--radius-lg);
+		margin: 8px auto;
+		box-shadow: var(--shadow-sm);
+	}
+
+	.empty-state-icon-box {
+		width: 46px;
+		height: 46px;
+		border-radius: var(--radius-md);
+		margin-bottom: 10px;
+	}
+
+	.empty-state-title {
+		font-size: 16px;
+		line-height: 1.35;
+		margin-bottom: 6px;
+	}
+
+	.empty-state-room-badge {
+		font-size: 14.5px;
+		padding: 1px 6px;
+	}
+
+	.empty-state-desc {
+		font-size: 11.5px;
+		line-height: 1.5;
+		margin-bottom: 12px;
+	}
+
+	.empty-state-badges-row {
+		gap: 4px;
+		margin-bottom: 14px;
+	}
+
+	.empty-badge {
+		font-size: 10px;
+		padding: 2px 7px;
+	}
+
+	.starter-prompts-container {
+		padding-top: 12px;
+	}
+
+	.starter-prompts-label {
+		font-size: 10px;
+		margin-bottom: 6px;
+	}
+
+	.starter-prompt-card {
+		padding: 8px 10px;
+		border-radius: var(--radius-sm);
+	}
+
+	.prompt-card-title {
+		font-size: 12px;
+	}
+
+	.prompt-card-text {
+		font-size: 11px;
+		line-height: 1.35;
 	}
 }

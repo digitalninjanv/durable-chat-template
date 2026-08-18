@@ -260,17 +260,25 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 				{displayedMessages.length === 0 ? (
 					<div className="chat-empty-state-card">
 						<div className="empty-state-icon-box">
-							<CloudflareIcon size={36} />
+							<CloudflareIcon size={32} />
 						</div>
-						<h3 className="empty-state-title">
-							Selamat datang di #{room}
-						</h3>
+
+						<h2 className="empty-state-title">
+							Selamat datang di <span className="empty-state-room-badge">#{room}</span>
+						</h2>
+
 						<p className="empty-state-desc">
-							Ruangan ini terhubung langsung ke instans <strong>Durable Object SQLite</strong> edge regional dengan integrasi <strong>Google Gemma 4 AI</strong>.
+							Ruangan ini aktif di instans <strong>Durable Object SQLite</strong> edge regional dengan enkripsi WebCrypto dan integrasi <strong>Google Gemma 4 AI</strong>.
 						</p>
 
+						<div className="empty-state-badges-row">
+							<span className="empty-badge">⚡ Sub-ms SQLite</span>
+							<span className="empty-badge">🔒 E2EE Ready</span>
+							<span className="empty-badge">🤖 Gemma 4 AI</span>
+						</div>
+
 						<div className="starter-prompts-container">
-							<span className="starter-prompts-label">Mulai percakapan atau panggil AI:</span>
+							<span className="starter-prompts-label">Saran Pertanyaan / Tindakan Cepat:</span>
 							<div className="starter-prompts-grid">
 								{STARTER_PROMPTS.map((p, idx) => (
 									<button
@@ -279,7 +287,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 										className="starter-prompt-card"
 										onClick={() => onSendPrompt(p.text)}
 									>
-										<div className="prompt-card-title">{p.title}</div>
+										<div className="prompt-card-header-row">
+											<span className="prompt-card-title">{p.title}</span>
+											<span className="prompt-card-arrow">→</span>
+										</div>
 										<div className="prompt-card-text">{p.text}</div>
 									</button>
 								))}
